@@ -31,12 +31,14 @@
 	let swipeOffsetEm = $state<number>(0);
 	let swipeTrigger = $state(false);
 
-	const minSwipeDistanceEm = 3;
-	const minTriggerDistanceEm = 6;
+	const minSwipeDistanceEm = 4;
+	const minTriggerDistanceEm = 12;
 
 	function registerSwipeStart(e: TouchEvent) {
 		if (show === 'left') swipeOffsetEm = minSwipeDistanceEm;
 		else if (show === 'right') swipeOffsetEm = -minSwipeDistanceEm;
+		else swipeOffsetEm = 0;
+
 		registerSwipe(e);
 	}
 
@@ -48,12 +50,12 @@
 		if (swipeTouches.length < 2) return;
 		const swipeDistancePx = swipeTouches[swipeTouches.length - 1] - swipeTouches[0];
 		const swipeDistanceEm = swipeDistancePx / containerEmSizePx + swipeOffsetEm;
-		const triggerDistanceEm = Math.abs(swipeDistancePx / containerEmSizePx);
+		const swipeDistanceEmAbs = Math.abs(swipeDistanceEm);
 
-		if (!swipeTrigger && triggerDistanceEm >= minTriggerDistanceEm) {
+		if (!swipeTrigger && swipeDistanceEmAbs >= minTriggerDistanceEm) {
 			onpretrigger?.();
 			swipeTrigger = true;
-		} else if (swipeTrigger && triggerDistanceEm <= minTriggerDistanceEm) {
+		} else if (swipeTrigger && swipeDistanceEmAbs <= minTriggerDistanceEm) {
 			onpretriggerrevert?.();
 			swipeTrigger = false;
 		}

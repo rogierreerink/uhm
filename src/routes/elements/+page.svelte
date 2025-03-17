@@ -22,12 +22,12 @@
 		ChevronIcon
 	} from '$lib/components/icons';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
-	import { TextInput } from '$lib/components/form';
+	import { CheckInput, TextInput } from '$lib/components/form';
 	import { Modal, ModalBackdrop } from '$lib/components/modal';
 	import { unfoldHeight } from '$lib/transitions';
 	import { Label } from '$lib/components/labels';
 
-	const items = [
+	const items = $state([
 		{ label: 'hi', checked: true },
 		{ label: 'hey', checked: true },
 		{ label: 'yo', checked: false },
@@ -39,7 +39,7 @@
 		{ label: 'yoo', checked: false },
 		{ label: 'wow', checked: false },
 		{ label: 'wauw', checked: false }
-	];
+	]);
 
 	const options = [{ label: 'options 1' }, { label: 'options 2' }, { label: 'options 3' }];
 
@@ -127,9 +127,9 @@
 							{item.label}
 						</TextSlot>
 
-						<ButtonSlot>
+						<ButtonSlot onclick={(e) => (item.checked = !item.checked)}>
 							<IconSlot>
-								<CheckIcon enable={item.checked} />
+								<CheckInput checked={item.checked} />
 							</IconSlot>
 						</ButtonSlot>
 

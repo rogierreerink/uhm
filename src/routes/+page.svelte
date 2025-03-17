@@ -11,11 +11,11 @@
 	} from '$lib/components/list/slots';
 	import { MoreIcon, CheckIcon, AddIcon, SubstractIcon } from '$lib/components/icons';
 	import { Button } from '$lib/components/form/buttons';
-	import { TextInput } from '$lib/components/form';
+	import { CheckInput, TextInput } from '$lib/components/form';
 	import { unfoldHeight } from '$lib/transitions';
 	import { Label } from '$lib/components/labels';
 
-	const items = [
+	const items = $state([
 		{ qty: '1', label: 'hi', isle: 'bloep', checked: true },
 		{ qty: '2', label: 'hey', isle: 'bloep', checked: true },
 		{ qty: '1', label: 'yo', isle: 'blep', checked: false },
@@ -27,7 +27,7 @@
 		{ qty: '1', label: 'yoo', checked: false },
 		{ qty: '1', label: 'wow', checked: false },
 		{ qty: '1', label: 'wauw', checked: false }
-	];
+	]);
 
 	let qtyDropdownItem = $state<number>();
 	let moreDropdownItem = $state<number>();
@@ -35,6 +35,7 @@
 		idx: number;
 		area: 'left' | 'right';
 		pretriggered?: boolean;
+		trigger?: () => void;
 	}>();
 </script>
 
@@ -47,12 +48,30 @@
 				<ListItem>
 					<SwipeSlot
 						show={swipedItem?.idx === itemIdx ? swipedItem.area : undefined}
-						onshow={(area) => (swipedItem = { idx: itemIdx, area })}
-						onpretrigger={() => (swipedItem = swipedItem && { ...swipedItem, pretriggered: true })}
-						onpretriggerrevert={() =>
-							(swipedItem = swipedItem && { ...swipedItem, pretriggered: false })}
-						ontrigger={() => console.log('trigger')}
-						onclose={() => (swipedItem = undefined)}
+						onshow={(area) => {
+							swipedItem = {
+								idx: itemIdx,
+								area,
+								trigger: area === 'right' ? () => (item.checked = !item.checked) : undefined
+							};
+						}}
+						onpretrigger={() => {
+							if (swipedItem) {
+								swipedItem = { ...swipedItem, pretriggered: true };
+							}
+						}}
+						onpretriggerrevert={() => {
+							if (swipedItem) {
+								swipedItem = { ...swipedItem, pretriggered: false };
+							}
+						}}
+						ontrigger={() => {
+							swipedItem?.trigger?.();
+							swipedItem = undefined;
+						}}
+						onclose={() => {
+							swipedItem = undefined;
+						}}
 					>
 						<DropdownSlot>
 							<ButtonSlot
@@ -65,7 +84,7 @@
 							{#snippet dropdown()}
 								{#if qtyDropdownItem === itemIdx}
 									<div class="dropdown" style={`z-index: ${items.length + 10 - itemIdx}`}>
-										<Box>
+										<Dropdown>
 											<div transition:unfoldHeight>
 												<List>
 													<ListItem>
@@ -85,7 +104,7 @@
 													</ListItem>
 												</List>
 											</div>
-										</Box>
+										</Dropdown>
 									</div>
 								{/if}
 							{/snippet}
@@ -135,9 +154,9 @@
 							{/snippet}
 						</DropdownSlot>
 
-						<ButtonSlot>
+						<ButtonSlot onclick={(e) => (item.checked = !item.checked)}>
 							<IconSlot>
-								<CheckIcon enable={item.checked} />
+								<CheckInput checked={item.checked} />
 							</IconSlot>
 						</ButtonSlot>
 
@@ -148,7 +167,7 @@
 						{/snippet}
 
 						{#snippet right()}
-							<ButtonSlot>
+							<ButtonSlot onclick={() => (item.checked = !item.checked)}>
 								<TextSlot>
 									{item.checked ? 'uncheck' : 'check'}
 								</TextSlot>

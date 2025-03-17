@@ -298,7 +298,7 @@
 body {
 	all: unset;
 	font-family: 'Nunito', sans-serif;
-	color: white;
+	color: var(--theme-color-primary-400);
 	background-color: var(--theme-color-primary-900);
 	width: 100vw;
 	height: 100vh;
@@ -310,6 +310,5 @@ h3,
 h4,
 h5,
 p {
-	color: var(--theme-color-primary-400);
 	margin: 0.8em 0.4em;
 }

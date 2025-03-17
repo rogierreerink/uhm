@@ -55,10 +55,14 @@
 		border-top-left-radius: 0;
 		border-top-right-radius: 0;
 	}
+	button:hover {
+		color: var(--element-color-300);
+	}
 	button:active {
 		margin-top: 0.125em;
 		margin-bottom: -0.125em;
 		box-shadow: 0.125em 0.125em 0 var(--element-color-950);
+		color: var(--element-color-200);
 	}
 	button.vertical-group:active {
 		margin: 0;
