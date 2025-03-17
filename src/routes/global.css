@@ -269,6 +269,30 @@
 	--theme-color-primary-800: var(--color-zinc-800);
 	--theme-color-primary-900: var(--color-zinc-900);
 	--theme-color-primary-950: var(--color-zinc-950);
+
+	--theme-color-danger-50: var(--color-red-50);
+	--theme-color-danger-100: var(--color-red-100);
+	--theme-color-danger-200: var(--color-red-200);
+	--theme-color-danger-300: var(--color-red-300);
+	--theme-color-danger-400: var(--color-red-400);
+	--theme-color-danger-500: var(--color-red-500);
+	--theme-color-danger-600: var(--color-red-600);
+	--theme-color-danger-700: var(--color-red-700);
+	--theme-color-danger-800: var(--color-red-800);
+	--theme-color-danger-900: var(--color-red-900);
+	--theme-color-danger-950: var(--color-red-950);
+
+	--element-color-50: var(--theme-color-primary-50);
+	--element-color-100: var(--theme-color-primary-100);
+	--element-color-200: var(--theme-color-primary-200);
+	--element-color-300: var(--theme-color-primary-300);
+	--element-color-400: var(--theme-color-primary-400);
+	--element-color-500: var(--theme-color-primary-500);
+	--element-color-600: var(--theme-color-primary-600);
+	--element-color-700: var(--theme-color-primary-700);
+	--element-color-800: var(--theme-color-primary-800);
+	--element-color-900: var(--theme-color-primary-900);
+	--element-color-950: var(--theme-color-primary-950);
 }
 
 body {

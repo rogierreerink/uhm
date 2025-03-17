@@ -29,9 +29,9 @@
 		all: unset;
 		display: block;
 		cursor: pointer;
-		color: var(--theme-color-primary-700);
+		color: var(--element-color-700);
 	}
 	li a.current {
-		color: var(--theme-color-primary-400);
+		color: var(--element-color-400);
 	}
 </style>

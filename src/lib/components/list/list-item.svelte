@@ -15,10 +15,10 @@
 <style>
 	li {
 		display: flex;
-		color: var(--theme-color-primary-400);
+		color: var(--element-color-400);
 		--slot-padding: 0.3em 0.4em;
 	}
 	li:not(:last-child) {
-		border-bottom: 1px solid var(--theme-color-primary-700);
+		border-bottom: 1px solid var(--element-color-700);
 	}
 </style>

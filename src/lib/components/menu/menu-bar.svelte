@@ -32,8 +32,8 @@
 	.menu-bar {
 		display: flex;
 		flex-direction: column;
-		border-top: 1px solid var(--theme-color-primary-700);
-		background-color: var(--theme-color-primary-900);
+		border-top: 1px solid var(--element-color-700);
+		background-color: var(--element-color-900);
 	}
 	.menu-bar ul {
 		list-style: none;
@@ -46,13 +46,13 @@
 		padding: 0.8em;
 		font-size: 1em;
 		line-height: 0;
-		color: var(--theme-color-primary-700);
+		color: var(--element-color-700);
 		cursor: pointer;
 	}
 	.menu-bar .hamburger:hover {
-		color: var(--theme-color-primary-300);
+		color: var(--element-color-300);
 	}
 	.menu-bar .hamburger:active {
-		color: var(--theme-color-primary-200);
+		color: var(--element-color-200);
 	}
 </style>

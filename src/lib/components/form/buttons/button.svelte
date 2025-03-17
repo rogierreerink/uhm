@@ -29,11 +29,11 @@
 		justify-content: center;
 		align-items: center;
 		padding: 0.3em 0.4em;
-		border: 1px solid var(--theme-color-primary-700);
+		border: 1px solid var(--element-color-700);
 		border-radius: 0.25em;
-		box-shadow: 0.25em 0.25em 0 var(--theme-color-primary-950);
-		background-color: var(--theme-color-primary-800);
-		color: var(--theme-color-primary-400);
+		box-shadow: 0.25em 0.25em 0 var(--element-color-950);
+		background-color: var(--element-color-800);
+		color: var(--element-color-400);
 		cursor: pointer;
 		user-select: none;
 		transition: ease 0.1s;
@@ -58,7 +58,7 @@
 	button:active {
 		margin-top: 0.125em;
 		margin-bottom: -0.125em;
-		box-shadow: 0.125em 0.125em 0 var(--theme-color-primary-950);
+		box-shadow: 0.125em 0.125em 0 var(--element-color-950);
 	}
 	button.vertical-group:active {
 		margin: 0;

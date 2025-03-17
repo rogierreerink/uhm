@@ -1,1 +1,2 @@
-export { default as Border } from './border.svelte';
+export { default as Box } from './box.svelte';
+export { default as Dropdown } from './dropdown.svelte';

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { Border } from '../boxes';
+	import { Box } from '../boxes';
 
 	let {
 		children,
@@ -12,9 +12,9 @@
 </script>
 
 <div class="modal">
-	<Border>
+	<Box>
 		{@render children?.()}
-	</Border>
+	</Box>
 
 	<div class="footer">
 		{@render footer?.()}

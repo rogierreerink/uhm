@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Border } from '$lib/components/boxes';
+	import { Box, Dropdown } from '$lib/components/boxes';
 	import { List, ListItem } from '$lib/components/list';
 	import {
 		Slot,
@@ -24,7 +24,7 @@
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { TextInput } from '$lib/components/form';
 	import { Modal, ModalBackdrop } from '$lib/components/modal';
-	import { unfoldHeight, unfoldWidth } from '$lib/transitions';
+	import { unfoldHeight } from '$lib/transitions';
 	import { Label } from '$lib/components/labels';
 
 	const items = [
@@ -57,9 +57,9 @@
 
 	<div class="search">
 		<div class="input">
-			<Border>
+			<Box>
 				<TextInput placeholder="search items..." />
-			</Border>
+			</Box>
 		</div>
 		<div class="button">
 			<ButtonGroup>
@@ -73,7 +73,7 @@
 		</div>
 	</div>
 
-	<Border>
+	<Box>
 		<List>
 			{#each items as item, itemIdx}
 				<ListItem>
@@ -102,7 +102,7 @@
 							{#snippet dropdown()}
 								{#if showItemDropdown === itemIdx}
 									<div class="dropdown" style={`z-index: ${items.length + 10 - itemIdx}`}>
-										<Border>
+										<Dropdown>
 											<div transition:unfoldHeight>
 												<List>
 													<ListItem>
@@ -117,7 +117,7 @@
 													</ListItem>
 												</List>
 											</div>
-										</Border>
+										</Dropdown>
 									</div>
 								{/if}
 							{/snippet}
@@ -159,9 +159,9 @@
 				</Slot>
 			</ListItem>
 		</List>
-	</Border>
+	</Box>
 
-	<Border>
+	<Box>
 		<List>
 			{#each options as option, optionIdx}
 				<ListItem>
@@ -183,9 +183,9 @@
 				</ListItem>
 			{/each}
 		</List>
-	</Border>
+	</Box>
 
-	<Border>
+	<Box>
 		<List>
 			<ListItem>
 				<IconSlot>
@@ -220,7 +220,7 @@
 				</IconSlot>
 			</ListItem>
 		</List>
-	</Border>
+	</Box>
 
 	<div class="buttons">
 		<ButtonGroup orientation="horizontal">

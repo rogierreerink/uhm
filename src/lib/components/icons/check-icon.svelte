@@ -16,10 +16,10 @@
 	.check {
 		all: unset;
 		display: inline-flex;
-		color: var(--theme-color-primary-700);
+		color: var(--element-color-700);
 	}
 	.check.enable {
-		color: var(--theme-color-primary-400);
+		color: var(--element-color-400);
 	}
 	.check:hover,
 	.check:active {

@@ -22,14 +22,14 @@
 		flex: 1;
 		display: flex;
 		position: relative;
-		color: var(--theme-color-primary-700);
+		color: var(--element-color-700);
 		cursor: pointer;
 	}
 	a:hover {
-		color: var(--theme-color-primary-300);
+		color: var(--element-color-300);
 	}
 	a:active {
-		color: var(--theme-color-primary-200);
+		color: var(--element-color-200);
 	}
 	a.fill {
 		flex: 1;

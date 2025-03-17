@@ -23,14 +23,14 @@
 		position: relative;
 		justify-content: center;
 		align-items: center;
-		color: var(--theme-color-primary-700);
+		color: var(--element-color-700);
 		cursor: pointer;
 	}
 	button:hover {
-		color: var(--theme-color-primary-300);
+		color: var(--element-color-300);
 	}
 	button:active {
-		color: var(--theme-color-primary-200);
+		color: var(--element-color-200);
 	}
 	button.fill {
 		flex: 1;

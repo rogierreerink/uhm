@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Border } from '$lib/components/boxes';
+	import { Box, Dropdown } from '$lib/components/boxes';
 	import { List, ListItem } from '$lib/components/list';
 	import {
 		TextSlot,
@@ -38,7 +38,7 @@
 <section class="page">
 	<h1>Recipes</h1>
 
-	<Border>
+	<Box>
 		<List>
 			{#each items as item, itemIdx}
 				<ListItem>
@@ -63,7 +63,7 @@
 							{#snippet dropdown()}
 								{#if dropdownItem === itemIdx}
 									<div class="dropdown" style={`z-index: ${items.length + 10 - itemIdx}`}>
-										<Border>
+										<Dropdown>
 											<div transition:unfoldHeight>
 												<List>
 													<ListItem>
@@ -78,7 +78,7 @@
 													</ListItem>
 												</List>
 											</div>
-										</Border>
+										</Dropdown>
 									</div>
 								{/if}
 							{/snippet}
@@ -111,13 +111,13 @@
 				</ListItem>
 			{/each}
 		</List>
-	</Border>
+	</Box>
 
 	<div class="add-item">
 		<div class="input">
-			<Border>
+			<Box>
 				<TextInput placeholder="add item..." />
-			</Border>
+			</Box>
 		</div>
 		<Button>
 			<CheckIcon />
