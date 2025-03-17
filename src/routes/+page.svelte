@@ -1,7 +1,13 @@
 <script lang="ts">
 	import { Border } from '$lib/components/boxes';
 	import { List, ListItem } from '$lib/components/list';
-	import { TextSlot, ButtonSlot, IconSlot, DropdownSlot } from '$lib/components/list/slots';
+	import {
+		TextSlot,
+		ButtonSlot,
+		IconSlot,
+		DropdownSlot,
+		SwipeSlot
+	} from '$lib/components/list/slots';
 	import { MoreIcon, CheckIcon } from '$lib/components/icons';
 	import { Button } from '$lib/components/form/buttons';
 	import { TextInput } from '$lib/components/form';
@@ -22,55 +28,86 @@
 	];
 
 	let dropdownItem = $state<number>();
+	let swipedItem = $state<{
+		idx: number;
+		area: 'left' | 'right';
+		pretriggered?: boolean;
+	}>();
 </script>
 
 <section class="page">
+	<h1>Shopping list</h1>
+
 	<Border>
 		<List>
 			{#each items as item, itemIdx}
 				<ListItem>
-					<DropdownSlot>
-						<ButtonSlot
-							onclick={() => (dropdownItem = dropdownItem !== itemIdx ? itemIdx : undefined)}
-						>
+					<SwipeSlot
+						show={swipedItem?.idx === itemIdx ? swipedItem.area : undefined}
+						onshow={(area) => (swipedItem = { idx: itemIdx, area })}
+						onpretrigger={() => (swipedItem = swipedItem && { ...swipedItem, pretriggered: true })}
+						onpretriggerrevert={() =>
+							(swipedItem = swipedItem && { ...swipedItem, pretriggered: false })}
+						ontrigger={() => console.log('trigger')}
+						onclose={() => (swipedItem = undefined)}
+					>
+						<DropdownSlot>
+							<ButtonSlot
+								onclick={() => (dropdownItem = dropdownItem !== itemIdx ? itemIdx : undefined)}
+							>
+								<IconSlot>
+									<MoreIcon />
+								</IconSlot>
+							</ButtonSlot>
+
+							{#snippet dropdown()}
+								{#if dropdownItem === itemIdx}
+									<div class="dropdown" style={`z-index: ${items.length + 10 - itemIdx}`}>
+										<Border --box-bg-color="var(--color-zinc-800)">
+											<div transition:unfoldHeight>
+												<List>
+													<ListItem>
+														<ButtonSlot>
+															<TextSlot>details</TextSlot>
+														</ButtonSlot>
+													</ListItem>
+													<ListItem>
+														<ButtonSlot>
+															<TextSlot>delete</TextSlot>
+														</ButtonSlot>
+													</ListItem>
+												</List>
+											</div>
+										</Border>
+									</div>
+								{/if}
+							{/snippet}
+						</DropdownSlot>
+
+						<TextSlot fill>
+							{item.label}
+						</TextSlot>
+
+						<ButtonSlot>
 							<IconSlot>
-								<MoreIcon />
+								<CheckIcon enable={item.checked} />
 							</IconSlot>
 						</ButtonSlot>
 
-						{#snippet dropdown()}
-							{#if dropdownItem === itemIdx}
-								<div class="dropdown" style={`z-index: ${items.length + 10 - itemIdx}`}>
-									<Border --box-bg-color="var(--color-zinc-800)">
-										<div transition:unfoldHeight>
-											<List>
-												<ListItem>
-													<ButtonSlot>
-														<TextSlot>details</TextSlot>
-													</ButtonSlot>
-												</ListItem>
-												<ListItem>
-													<ButtonSlot>
-														<TextSlot>delete</TextSlot>
-													</ButtonSlot>
-												</ListItem>
-											</List>
-										</div>
-									</Border>
-								</div>
-							{/if}
+						{#snippet left()}
+							<ButtonSlot>
+								<TextSlot>delete</TextSlot>
+							</ButtonSlot>
 						{/snippet}
-					</DropdownSlot>
 
-					<TextSlot fill>
-						{item.label}
-					</TextSlot>
-
-					<ButtonSlot>
-						<IconSlot>
-							<CheckIcon enable={item.checked} />
-						</IconSlot>
-					</ButtonSlot>
+						{#snippet right()}
+							<ButtonSlot>
+								<TextSlot>
+									{item.checked ? 'uncheck' : 'check'}
+								</TextSlot>
+							</ButtonSlot>
+						{/snippet}
+					</SwipeSlot>
 				</ListItem>
 			{/each}
 		</List>
@@ -92,7 +129,7 @@
 	.page {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5em;
+		gap: 1em;
 	}
 	.page .dropdown {
 		position: relative;

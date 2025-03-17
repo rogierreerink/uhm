@@ -123,8 +123,6 @@
 	.swipe {
 		flex: 1;
 		display: flex;
-		touch-action: none;
-		user-select: none;
 	}
 	.swipe .main {
 		flex: 1;

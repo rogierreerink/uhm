@@ -6,3 +6,4 @@ export { default as AtIcon } from './at-icon.svelte';
 export { default as InlineRightIcon } from './inline-right-icon.svelte';
 export { default as ArrowIcon } from './arrow-icon.svelte';
 export { default as CircleIcon } from './circle-icon.svelte';
+export { default as MenuIcon } from './menu-icon.svelte';

@@ -38,6 +38,7 @@
 <div bind:this={topRef} class="hidden">
 	{@render children?.()}
 </div>
+
 <div bind:this={boxRef}>
 	{@render children?.()}
 </div>

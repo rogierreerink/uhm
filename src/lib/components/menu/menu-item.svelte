@@ -15,13 +15,23 @@
 	} = $props();
 </script>
 
-<ListItem>
-	<AnchorSlot href={link}>
-		<TextSlot fill>
-			{@render children?.()}
-		</TextSlot>
-		<IconSlot>
-			<ArrowIcon direction={current ? 'r' : 'l'} animate />
-		</IconSlot>
-	</AnchorSlot>
-</ListItem>
+<li>
+	<a href={link} class:current>
+		{@render children?.()}
+	</a>
+</li>
+
+<style>
+	li {
+		margin: 0.6em 1em;
+	}
+	li a {
+		all: unset;
+		display: block;
+		cursor: pointer;
+		color: var(--color-zinc-700);
+	}
+	li a.current {
+		color: var(--color-zinc-400);
+	}
+</style>

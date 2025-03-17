@@ -2,8 +2,9 @@
 	import './global.css';
 	import type { Snippet } from 'svelte';
 	import { page } from '$app/state';
-	import { Menu, MenuItem } from '$lib/components/menu';
-	import { FixWidth } from '$lib/components/fix';
+	import { MenuBar, MenuItem } from '$lib/components/menu';
+	import { FixSpace } from '$lib/components/fix';
+	import { afterNavigate, onNavigate } from '$app/navigation';
 
 	let {
 		children
@@ -12,39 +13,71 @@
 	} = $props();
 
 	const menu = [
-		{ label: 'cart	', link: '/' },
+		{ label: 'shopping list', link: '/' },
 		{ label: 'products', link: '/products' },
 		{ label: 'recipes', link: '/recipes' },
 		{ label: 'elements', link: '/elements' }
 	];
+
+	let menuCollapsed = $state(true);
+	let menuCollapseTimer = $state<number>();
+	const menuCollapseAfterMs = 2000;
+
+	onNavigate(() => {
+		if (menuCollapseTimer !== undefined) {
+			clearTimeout(menuCollapseTimer);
+			menuCollapseTimer = undefined;
+		}
+	});
+
+	afterNavigate(() => {
+		if (!menuCollapsed) {
+			menuCollapseTimer = setTimeout(() => (menuCollapsed = true), menuCollapseAfterMs);
+		}
+	});
 </script>
 
 <div class="container">
-	<div class="menu">
-		<FixWidth>
-			<Menu>
+	<div class="page">
+		<div class="fill">
+			{@render children()}
+		</div>
+	</div>
+
+	<FixSpace style="bottom: 0; width 100%;">
+		<div class="menu">
+			<MenuBar collapsed={menuCollapsed} ontoggle={() => (menuCollapsed = !menuCollapsed)}>
 				{#each menu as item}
 					<MenuItem link={item.link} current={page.url.pathname === item.link}>
 						{item.label}
 					</MenuItem>
 				{/each}
-			</Menu>
-		</FixWidth>
-	</div>
-
-	<div class="page">
-		{@render children()}
-	</div>
+			</MenuBar>
+		</div>
+	</FixSpace>
 </div>
 
 <style>
 	.container {
-		display: flex;
-		height: 100vh;
-		margin: 1em;
-		gap: 1em;
+		display: grid;
+		grid-template-rows: 1fr auto;
+		grid-template-areas:
+			'page'
+			'menu';
+		min-height: 100vh;
 	}
 	.container .page {
-		flex: 1;
+		grid-area: page;
+		padding: 1em;
+	}
+	.container .page .fill {
+		width: 100%;
+		max-width: 800px;
+		margin: 0 auto;
+	}
+	.container .menu {
+		grid-area: menu;
+		width: 100vw;
+		z-index: 100;
 	}
 </style>

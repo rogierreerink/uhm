@@ -38,11 +38,11 @@
 		area: 'left' | 'right';
 		pretriggered?: boolean;
 	}>();
-
-	$inspect(showItemSwiped);
 </script>
 
 <section class="page">
+	<h1>Elements</h1>
+
 	<div class="search">
 		<div class="input">
 			<Border>
