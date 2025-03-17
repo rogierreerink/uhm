@@ -1,16 +1,13 @@
 <script lang="ts">
-	import IconAt from '~icons/quill/at';
+	import IconAt from '~icons/tabler/at';
 </script>
 
-<div class="at">
+<span class="at">
 	<IconAt />
-</div>
+</span>
 
 <style>
 	.at {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
+		display: inline-flex;
 	}
 </style>

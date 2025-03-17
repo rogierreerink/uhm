@@ -1,16 +1,13 @@
 <script lang="ts">
-	import IconEscape from '~icons/quill/escape';
+	import IconDelete from '~icons/tabler/x';
 </script>
 
-<div class="delete">
-	<IconEscape />
-</div>
+<span class="delete">
+	<IconDelete />
+</span>
 
 <style>
 	.delete {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
+		display: inline-flex;
 	}
 </style>

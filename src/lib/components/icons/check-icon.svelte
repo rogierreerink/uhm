@@ -1,5 +1,5 @@
 <script lang="ts">
-	import IconCheckMark from '~icons/quill/checkmark';
+	import IconCheck from '~icons/tabler/check';
 
 	let {
 		enable = true
@@ -8,17 +8,15 @@
 	} = $props();
 </script>
 
-<div class="check" class:enable>
-	<IconCheckMark />
-</div>
+<span class="check" class:enable>
+	<IconCheck />
+</span>
 
 <style>
 	.check {
 		all: unset;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
+		display: inline-flex;
+
 		color: var(--color, var(--color-zinc-700));
 	}
 	.check.enable {

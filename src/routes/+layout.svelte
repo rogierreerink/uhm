@@ -23,18 +23,21 @@
 	let menuCollapseTimer = $state<number>();
 	const menuCollapseAfterMs = 2000;
 
-	onNavigate(() => {
+	function startMenuCollapseTimer() {
+		if (!menuCollapsed) {
+			menuCollapseTimer = setTimeout(() => (menuCollapsed = true), menuCollapseAfterMs);
+		}
+	}
+
+	function clearMenuCollapseTimer() {
 		if (menuCollapseTimer !== undefined) {
 			clearTimeout(menuCollapseTimer);
 			menuCollapseTimer = undefined;
 		}
-	});
+	}
 
-	afterNavigate(() => {
-		if (!menuCollapsed) {
-			menuCollapseTimer = setTimeout(() => (menuCollapsed = true), menuCollapseAfterMs);
-		}
-	});
+	onNavigate(() => clearMenuCollapseTimer());
+	afterNavigate(() => startMenuCollapseTimer());
 </script>
 
 <div class="container">
@@ -46,7 +49,13 @@
 
 	<FixSpace style="bottom: 0; width 100%;">
 		<div class="menu">
-			<MenuBar collapsed={menuCollapsed} ontoggle={() => (menuCollapsed = !menuCollapsed)}>
+			<MenuBar
+				collapsed={menuCollapsed}
+				ontoggle={() => {
+					menuCollapsed = !menuCollapsed;
+					clearMenuCollapseTimer();
+				}}
+			>
 				{#each menu as item}
 					<MenuItem link={item.link} current={page.url.pathname === item.link}>
 						{item.label}

@@ -9,11 +9,23 @@
 		DropdownSlot,
 		SwipeSlot
 	} from '$lib/components/list/slots';
-	import { MoreIcon, CheckIcon, DeleteIcon } from '$lib/components/icons';
+	import {
+		MoreIcon,
+		CheckIcon,
+		DeleteIcon,
+		AddIcon,
+		ArrowIcon,
+		AtIcon,
+		CircleIcon,
+		MenuIcon,
+		SubstractIcon,
+		ChevronIcon
+	} from '$lib/components/icons';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { TextInput } from '$lib/components/form';
 	import { Modal, ModalBackdrop } from '$lib/components/modal';
 	import { unfoldHeight, unfoldWidth } from '$lib/transitions';
+	import { Label } from '$lib/components/labels';
 
 	const items = [
 		{ label: 'hi', checked: true },
@@ -151,15 +163,62 @@
 
 	<Border>
 		<List>
-			{#each options as option}
+			{#each options as option, optionIdx}
 				<ListItem>
 					<ButtonSlot fill>
 						<TextSlot fill>
 							{option.label}
 						</TextSlot>
 					</ButtonSlot>
+					{#if optionIdx === 0}
+						<TextSlot>
+							<Label>
+								<ArrowIcon /> some label with icon
+							</Label>
+						</TextSlot>
+						<TextSlot>
+							<Label>some label</Label>
+						</TextSlot>
+					{/if}
 				</ListItem>
 			{/each}
+		</List>
+	</Border>
+
+	<Border>
+		<List>
+			<ListItem>
+				<IconSlot>
+					<AddIcon />
+				</IconSlot>
+				<IconSlot>
+					<ArrowIcon />
+				</IconSlot>
+				<IconSlot>
+					<AtIcon />
+				</IconSlot>
+				<IconSlot>
+					<CheckIcon />
+				</IconSlot>
+				<IconSlot>
+					<ChevronIcon />
+				</IconSlot>
+				<IconSlot>
+					<CircleIcon />
+				</IconSlot>
+				<IconSlot>
+					<DeleteIcon />
+				</IconSlot>
+				<IconSlot>
+					<MenuIcon />
+				</IconSlot>
+				<IconSlot>
+					<MoreIcon />
+				</IconSlot>
+				<IconSlot>
+					<SubstractIcon />
+				</IconSlot>
+			</ListItem>
 		</List>
 	</Border>
 
@@ -212,6 +271,12 @@
 		<h3>heading 3</h3>
 		<h4>heading 4</h4>
 		<h5>heading 5</h5>
+		<p>
+			Nescio brains an Undead zombies. Sicut <Label>this is a label</Label>
+			<Label><ArrowIcon /> this is a label with an icon</Label> incessu zomby. The voodoo sacerdos flesh
+			eater, suscitat mortuos comedere carnem virus. Zonbi tattered for solum oculi eorum defunctis go
+			lum cerebro.
+		</p>
 		<p>
 			Zombie ipsum reversus ab viral inferno, nam rick grimes malum cerebro. De carne lumbering
 			animata corpora quaeritis. Summus brains sit​​, morbo vel maleficia? De apocalypsi gorger

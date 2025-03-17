@@ -1,16 +1,13 @@
 <script lang="ts">
-	import IconMore from '~icons/quill/meatballs-v';
+	import IconMore from '~icons/tabler/dots-vertical';
 </script>
 
-<div class="more">
+<span class="more">
 	<IconMore />
-</div>
+</span>
 
 <style>
 	.more {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
+		display: inline-flex;
 	}
 </style>

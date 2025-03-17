@@ -1,16 +1,13 @@
 <script lang="ts">
-	import IconAdd from '~icons/quill/add';
+	import IconAdd from '~icons/tabler/plus';
 </script>
 
-<div class="add">
+<span class="add">
 	<IconAdd />
-</div>
+</span>
 
 <style>
 	.add {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
+		display: inline-flex;
 	}
 </style>

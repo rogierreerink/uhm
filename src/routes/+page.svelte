@@ -6,28 +6,31 @@
 		ButtonSlot,
 		IconSlot,
 		DropdownSlot,
-		SwipeSlot
+		SwipeSlot,
+		Slot
 	} from '$lib/components/list/slots';
-	import { MoreIcon, CheckIcon } from '$lib/components/icons';
+	import { MoreIcon, CheckIcon, AddIcon, SubstractIcon } from '$lib/components/icons';
 	import { Button } from '$lib/components/form/buttons';
 	import { TextInput } from '$lib/components/form';
 	import { unfoldHeight } from '$lib/transitions';
+	import { Label } from '$lib/components/labels';
 
 	const items = [
-		{ label: 'hi', checked: true },
-		{ label: 'hey', checked: true },
-		{ label: 'yo', checked: false },
-		{ label: 'yoo', checked: true },
-		{ label: 'wow', checked: false },
-		{ label: 'wauw', checked: false },
-		{ label: 'hey', checked: false },
-		{ label: 'yo', checked: false },
-		{ label: 'yoo', checked: false },
-		{ label: 'wow', checked: false },
-		{ label: 'wauw', checked: false }
+		{ qty: '1', label: 'hi', isle: 'bloep', checked: true },
+		{ qty: '2', label: 'hey', isle: 'bloep', checked: true },
+		{ qty: '1', label: 'yo', isle: 'blep', checked: false },
+		{ qty: '500gr', label: 'yoo', isle: 'blop', checked: true },
+		{ qty: '1l', label: 'wow', isle: 'blup', checked: false },
+		{ qty: '1', label: 'wauw', isle: 'blup', checked: false },
+		{ qty: '1', label: 'hey', checked: false },
+		{ qty: '1', label: 'yo', checked: false },
+		{ qty: '1', label: 'yoo', checked: false },
+		{ qty: '1', label: 'wow', checked: false },
+		{ qty: '1', label: 'wauw', checked: false }
 	];
 
-	let dropdownItem = $state<number>();
+	let qtyDropdownItem = $state<number>();
+	let moreDropdownItem = $state<number>();
 	let swipedItem = $state<{
 		idx: number;
 		area: 'left' | 'right';
@@ -53,7 +56,55 @@
 					>
 						<DropdownSlot>
 							<ButtonSlot
-								onclick={() => (dropdownItem = dropdownItem !== itemIdx ? itemIdx : undefined)}
+								onclick={() =>
+									(qtyDropdownItem = qtyDropdownItem !== itemIdx ? itemIdx : undefined)}
+							>
+								<TextSlot>{item.qty}</TextSlot>
+							</ButtonSlot>
+
+							{#snippet dropdown()}
+								{#if qtyDropdownItem === itemIdx}
+									<div class="dropdown" style={`z-index: ${items.length + 10 - itemIdx}`}>
+										<Border --box-bg-color="var(--color-zinc-800)">
+											<div transition:unfoldHeight>
+												<List>
+													<ListItem>
+														<ButtonSlot>
+															<IconSlot>
+																<SubstractIcon />
+															</IconSlot>
+														</ButtonSlot>
+														<Slot>
+															<TextInput size={5} value={item.qty} />
+														</Slot>
+														<ButtonSlot>
+															<IconSlot>
+																<AddIcon />
+															</IconSlot>
+														</ButtonSlot>
+													</ListItem>
+												</List>
+											</div>
+										</Border>
+									</div>
+								{/if}
+							{/snippet}
+						</DropdownSlot>
+
+						<TextSlot fill>
+							{item.label}
+						</TextSlot>
+
+						{#if item.isle}
+							<TextSlot>
+								<Label>{item.isle}</Label>
+							</TextSlot>
+						{/if}
+
+						<DropdownSlot position="to-left">
+							<ButtonSlot
+								onclick={() =>
+									(moreDropdownItem = moreDropdownItem !== itemIdx ? itemIdx : undefined)}
 							>
 								<IconSlot>
 									<MoreIcon />
@@ -61,7 +112,7 @@
 							</ButtonSlot>
 
 							{#snippet dropdown()}
-								{#if dropdownItem === itemIdx}
+								{#if moreDropdownItem === itemIdx}
 									<div class="dropdown" style={`z-index: ${items.length + 10 - itemIdx}`}>
 										<Border --box-bg-color="var(--color-zinc-800)">
 											<div transition:unfoldHeight>
@@ -83,10 +134,6 @@
 								{/if}
 							{/snippet}
 						</DropdownSlot>
-
-						<TextSlot fill>
-							{item.label}
-						</TextSlot>
 
 						<ButtonSlot>
 							<IconSlot>
@@ -114,9 +161,11 @@
 	</Border>
 
 	<div class="add-item">
-		<div class="input">
+		<div class="input-box">
 			<Border>
-				<TextInput placeholder="add item..." />
+				<div class="input">
+					<TextInput placeholder="add item..." />
+				</div>
 			</Border>
 		</div>
 		<Button>
@@ -139,7 +188,10 @@
 		display: flex;
 		gap: 0.5em;
 	}
-	.page .add-item .input {
+	.page .add-item .input-box {
 		flex: 1;
+	}
+	.page .add-item .input-box .input {
+		display: flex;
 	}
 </style>

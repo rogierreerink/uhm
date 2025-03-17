@@ -45,6 +45,7 @@
 		margin-left: auto;
 		padding: 0.8em;
 		font-size: 1em;
+		line-height: 0;
 		color: var(--color-zinc-700);
 		cursor: pointer;
 	}

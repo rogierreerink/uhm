@@ -1,5 +1,5 @@
 <script lang="ts">
-	import IconArrowRight from '~icons/tabler/arrow-narrow-right';
+	import IconInlineRight from '~icons/tabler/chevron-right';
 
 	let {
 		direction = 'r',
@@ -11,29 +11,29 @@
 </script>
 
 <span
-	class="arrow"
+	class="inline-arrow"
 	class:left={direction === 'l'}
 	class:up={direction === 'u'}
 	class:down={direction === 'd'}
 	class:animate
 >
-	<IconArrowRight />
+	<IconInlineRight />
 </span>
 
 <style>
-	.arrow {
+	.inline-arrow {
 		display: inline-flex;
 	}
-	.arrow.left {
+	.inline-arrow.left {
 		transform: rotate(180deg);
 	}
-	.arrow.up {
+	.inline-arrow.up {
 		transform: rotate(-90deg);
 	}
-	.arrow.down {
+	.inline-arrow.down {
 		transform: rotate(90deg);
 	}
-	.arrow.animate {
+	.inline-arrow.animate {
 		transition: ease 0.2s;
 	}
 </style>

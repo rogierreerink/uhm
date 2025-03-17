@@ -1,16 +1,13 @@
 <script lang="ts">
-	import IconBreather from '~icons/quill/breather';
+	import IconCircle from '~icons/tabler/circle';
 </script>
 
-<div class="circle">
-	<IconBreather />
-</div>
+<span class="circle">
+	<IconCircle />
+</span>
 
 <style>
 	.circle {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
+		display: inline-flex;
 	}
 </style>

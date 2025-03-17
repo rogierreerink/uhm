@@ -1,16 +1,13 @@
 <script lang="ts">
-	import IconHamburger from '~icons/quill/hamburger';
+	import IconHamburger from '~icons/tabler/menu-2';
 </script>
 
-<div class="menu">
+<span class="menu">
 	<IconHamburger />
-</div>
+</span>
 
 <style>
 	.menu {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
+		display: inline-flex;
 	}
 </style>
