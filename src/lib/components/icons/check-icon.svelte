@@ -16,13 +16,13 @@
 	.check {
 		all: unset;
 		display: inline-flex;
-
-		color: var(--color, var(--color-zinc-700));
+		color: var(--theme-color-primary-700);
 	}
 	.check.enable {
-		color: var(--color-checked, var(--color-zinc-400));
+		color: var(--theme-color-primary-400);
 	}
-	.check:hover {
+	.check:hover,
+	.check:active {
 		color: inherit;
 	}
 </style>

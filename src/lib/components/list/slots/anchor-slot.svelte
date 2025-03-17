@@ -22,14 +22,14 @@
 		flex: 1;
 		display: flex;
 		position: relative;
-		color: var(--slot-color, var(--color-zinc-700));
+		color: var(--theme-color-primary-700);
 		cursor: pointer;
 	}
 	a:hover {
-		color: var(--slot-color-hover, var(--color-zinc-300));
+		color: var(--theme-color-primary-300);
 	}
 	a:active {
-		color: var(--slot-color-active, var(--color-zinc-200));
+		color: var(--theme-color-primary-200);
 	}
 	a.fill {
 		flex: 1;

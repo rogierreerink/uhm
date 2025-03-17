@@ -102,7 +102,7 @@
 							{#snippet dropdown()}
 								{#if showItemDropdown === itemIdx}
 									<div class="dropdown" style={`z-index: ${items.length + 10 - itemIdx}`}>
-										<Border --box-bg-color="var(--color-zinc-800)">
+										<Border>
 											<div transition:unfoldHeight>
 												<List>
 													<ListItem>

@@ -12,7 +12,7 @@
 </script>
 
 <div class="modal">
-	<Border --box-bg-color="var(--color-zinc-900)">
+	<Border>
 		{@render children?.()}
 	</Border>
 
@@ -27,5 +27,6 @@
 		flex-direction: column;
 		gap: 1em;
 		margin: 1em;
+		max-width: 800px;
 	}
 </style>

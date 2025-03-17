@@ -29,9 +29,9 @@
 		all: unset;
 		display: block;
 		cursor: pointer;
-		color: var(--color-zinc-700);
+		color: var(--theme-color-primary-700);
 	}
 	li a.current {
-		color: var(--color-zinc-400);
+		color: var(--theme-color-primary-400);
 	}
 </style>
