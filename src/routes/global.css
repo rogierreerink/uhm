@@ -2,14 +2,14 @@
 	font-family: 'Nunito';
 	font-style: normal;
 	font-weight: normal;
-	src: url('fonts/Nunito/static/Nunito-Regular.ttf') format('truetype');
+	src: url('/fonts/Nunito/static/Nunito-Regular.ttf') format('truetype');
 }
 
 @font-face {
 	font-family: 'Cutive Mono';
 	font-style: normal;
 	font-weight: normal;
-	src: url('fonts/Cutive_Mono/CutiveMono-Regular.ttf') format('truetype');
+	src: url('/fonts/Cutive_Mono/CutiveMono-Regular.ttf') format('truetype');
 }
 
 :root {
