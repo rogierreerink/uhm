@@ -6,7 +6,7 @@ export function unfoldHeight(
 ) {
 	return {
 		delay: params?.delay || 0,
-		duration: params?.duration || 200,
+		duration: params?.duration || 100,
 		easing: params?.easing || sineInOut,
 		css: (t: number) => (t === 1 ? '' : `height:${t * node.clientHeight}px; overflow:hidden;`)
 	};

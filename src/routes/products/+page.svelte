@@ -8,118 +8,215 @@
 		DropdownSlot,
 		SwipeSlot
 	} from '$lib/components/list/slots';
-	import { MoreIcon, CheckIcon } from '$lib/components/icons';
-	import { Button } from '$lib/components/form/buttons';
+	import { MoreIcon, CheckIcon, DeleteIcon } from '$lib/components/icons';
+	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { TextInput } from '$lib/components/form';
 	import { unfoldHeight } from '$lib/transitions';
+	import { page } from '$app/state';
+	import { product, products, type ProductsResponse } from '$lib/data/products';
+	import { onMount } from 'svelte';
+	import { replaceState } from '$app/navigation';
 
-	const items = [
-		{ label: 'hi', checked: true },
-		{ label: 'hey', checked: true },
-		{ label: 'yo', checked: false },
-		{ label: 'yoo', checked: true },
-		{ label: 'wow', checked: false },
-		{ label: 'wauw', checked: false },
-		{ label: 'hey', checked: false },
-		{ label: 'yo', checked: false },
-		{ label: 'yoo', checked: false },
-		{ label: 'wow', checked: false },
-		{ label: 'wauw', checked: false }
-	];
-
-	let dropdownItem = $state<number>();
+	let data = $state<ProductsResponse>();
+	let searchItemInput = $state(page.url.searchParams.get('name') || '');
+	let addItemInput = $state('');
+	let moreDropdownItem = $state<string>();
 	let swipedItem = $state<{
-		idx: number;
+		resourceId: string;
 		area: 'left' | 'right';
 		pretriggered?: boolean;
 	}>();
+
+	async function getProducts(init?: true) {
+		const searchParams: { [key: string]: string } = {};
+
+		const searchName = encodeURI(searchItemInput.trim());
+		if (searchName.length > 0) {
+			searchParams['name'] = searchName;
+		}
+
+		if (!init) {
+			replaceState(`?${new URLSearchParams(searchParams).toString()}`, {});
+		}
+
+		data = await products.get(searchParams);
+	}
+
+	async function createProduct() {
+		const text = addItemInput.trim();
+		if (text.length === 0) {
+			return;
+		}
+
+		addItemInput = '';
+
+		await products.post({
+			data: [{ name: text }]
+		});
+
+		getProducts();
+	}
+
+	async function deleteProduct(id: string) {
+		await product.delete(id);
+
+		getProducts();
+	}
+
+	onMount(() => {
+		getProducts(true);
+	});
 </script>
 
 <section class="page">
 	<h1>Products</h1>
 
+	<div class="search">
+		<div class="input">
+			<Box>
+				<div class="stretch">
+					<TextInput
+						placeholder="search items..."
+						value={searchItemInput}
+						oninput={(e) => {
+							searchItemInput = e.currentTarget.value;
+							getProducts();
+						}}
+					/>
+				</div>
+			</Box>
+		</div>
+		<div class="button">
+			<ButtonGroup>
+				<Button
+					onclick={() => {
+						searchItemInput = '';
+						getProducts();
+					}}
+				>
+					<DeleteIcon />
+				</Button>
+			</ButtonGroup>
+		</div>
+	</div>
+
 	<Box>
 		<List>
-			{#each items as item, itemIdx}
-				<ListItem>
-					<SwipeSlot
-						show={swipedItem?.idx === itemIdx ? swipedItem.area : undefined}
-						onshow={(area) => (swipedItem = { idx: itemIdx, area })}
-						onpretrigger={() => (swipedItem = swipedItem && { ...swipedItem, pretriggered: true })}
-						onpretriggerrevert={() =>
-							(swipedItem = swipedItem && { ...swipedItem, pretriggered: false })}
-						ontrigger={() => console.log('trigger')}
-						onclose={() => (swipedItem = undefined)}
-					>
-						<DropdownSlot>
-							<ButtonSlot
-								onclick={() => (dropdownItem = dropdownItem !== itemIdx ? itemIdx : undefined)}
-							>
-								<IconSlot>
-									<MoreIcon />
-								</IconSlot>
-							</ButtonSlot>
+			{#if data && (data.data.length || 0) > 0}
+				{#each data.data as item, itemIdx (item.id)}
+					<ListItem>
+						<SwipeSlot
+							show={swipedItem?.resourceId === item.id ? swipedItem.area : undefined}
+							onshow={(area) => {
+								if (area === 'left')
+									swipedItem = {
+										resourceId: item.id,
+										area
+									};
+							}}
+							onpretrigger={() => {
+								if (swipedItem) {
+									swipedItem = { ...swipedItem, pretriggered: true };
+								}
+							}}
+							onpretriggerrevert={() => {
+								if (swipedItem) {
+									swipedItem = { ...swipedItem, pretriggered: false };
+								}
+							}}
+							ontrigger={() => {
+								if (swipedItem?.area === 'left') {
+									deleteProduct(item.id);
+								}
+								swipedItem = undefined;
+							}}
+							onclose={() => {
+								swipedItem = undefined;
+							}}
+						>
+							<TextSlot fill>
+								{item.data.name}
+							</TextSlot>
 
-							{#snippet dropdown()}
-								{#if dropdownItem === itemIdx}
-									<div class="dropdown" style={`z-index: ${items.length + 10 - itemIdx}`}>
-										<Dropdown>
-											<div transition:unfoldHeight>
-												<List>
-													<ListItem>
-														<ButtonSlot>
-															<TextSlot>details</TextSlot>
-														</ButtonSlot>
-													</ListItem>
-													<ListItem>
-														<ButtonSlot>
-															<TextSlot>delete</TextSlot>
-														</ButtonSlot>
-													</ListItem>
-												</List>
-											</div>
-										</Dropdown>
-									</div>
-								{/if}
+							<DropdownSlot position="to-left">
+								<ButtonSlot
+									onclick={() => {
+										moreDropdownItem = moreDropdownItem !== item.id ? item.id : undefined;
+									}}
+								>
+									<IconSlot>
+										<MoreIcon />
+									</IconSlot>
+								</ButtonSlot>
+
+								{#snippet dropdown()}
+									{#if moreDropdownItem === item.id}
+										<div
+											class="dropdown"
+											style={`z-index: ${(data?.data.length || 0) + 10 - itemIdx}`}
+										>
+											<Dropdown>
+												<div transition:unfoldHeight>
+													<List>
+														<ListItem>
+															<ButtonSlot
+																onclick={() => {
+																	deleteProduct(item.id);
+																	moreDropdownItem = undefined;
+																}}
+															>
+																<TextSlot>delete</TextSlot>
+															</ButtonSlot>
+														</ListItem>
+													</List>
+												</div>
+											</Dropdown>
+										</div>
+									{/if}
+								{/snippet}
+							</DropdownSlot>
+
+							{#snippet left()}
+								<ButtonSlot
+									onclick={() => {
+										deleteProduct(item.id);
+										swipedItem = undefined;
+									}}
+								>
+									<TextSlot>delete</TextSlot>
+								</ButtonSlot>
 							{/snippet}
-						</DropdownSlot>
-
-						<TextSlot fill>
-							{item.label}
-						</TextSlot>
-
-						<ButtonSlot>
-							<IconSlot>
-								<CheckIcon enable={item.checked} />
-							</IconSlot>
-						</ButtonSlot>
-
-						{#snippet left()}
-							<ButtonSlot>
-								<TextSlot>delete</TextSlot>
-							</ButtonSlot>
-						{/snippet}
-
-						{#snippet right()}
-							<ButtonSlot>
-								<TextSlot>
-									{item.checked ? 'uncheck' : 'check'}
-								</TextSlot>
-							</ButtonSlot>
-						{/snippet}
-					</SwipeSlot>
+						</SwipeSlot>
+					</ListItem>
+				{/each}
+			{:else}
+				<ListItem>
+					<TextSlot />
 				</ListItem>
-			{/each}
+			{/if}
 		</List>
 	</Box>
 
 	<div class="add-item">
-		<div class="input">
+		<div class="input-box">
 			<Box>
-				<TextInput placeholder="add item..." />
+				<div class="input">
+					<TextInput
+						placeholder="add item..."
+						value={addItemInput}
+						oninput={(e) => {
+							addItemInput = e.currentTarget.value;
+						}}
+						onkeypress={(e) => {
+							if (e.key === 'Enter') {
+								createProduct();
+							}
+						}}
+					/>
+				</div>
 			</Box>
 		</div>
-		<Button>
+		<Button onclick={() => createProduct()}>
 			<CheckIcon />
 		</Button>
 	</div>
@@ -131,15 +228,31 @@
 		flex-direction: column;
 		gap: 1em;
 	}
+	.page .search {
+		display: flex;
+		gap: 0.5em;
+	}
+	.page .search .input {
+		flex: 1;
+	}
+	.page .search .input .stretch {
+		display: flex;
+	}
+	.page .search .button {
+		display: flex;
+	}
 	.page .dropdown {
 		position: relative;
-		margin-left: -1px;
+		margin-right: -1px;
 	}
 	.page .add-item {
 		display: flex;
 		gap: 0.5em;
 	}
-	.page .add-item .input {
+	.page .add-item .input-box {
 		flex: 1;
+	}
+	.page .add-item .input-box .input {
+		display: flex;
 	}
 </style>
