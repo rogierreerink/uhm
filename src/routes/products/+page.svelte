@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto, invalidate } from '$app/navigation';
+	import { page } from '$app/state';
 	import { Box, Dropdown } from '$lib/components/boxes';
 	import { List, ListItem } from '$lib/components/list';
 	import {
@@ -11,13 +13,15 @@
 	import { MoreIcon, CheckIcon, DeleteIcon } from '$lib/components/icons';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { TextInput } from '$lib/components/form';
-	import { unfoldHeight } from '$lib/transitions';
-	import { page } from '$app/state';
 	import { product, products, type ProductsResponse } from '$lib/data/products';
-	import { onMount } from 'svelte';
-	import { replaceState } from '$app/navigation';
+	import { unfoldHeight } from '$lib/transitions';
 
-	let data = $state<ProductsResponse>();
+	let {
+		data
+	}: {
+		data: ProductsResponse;
+	} = $props();
+
 	let searchItemInput = $state(page.url.searchParams.get('name') || '');
 	let addItemInput = $state('');
 	let moreDropdownItem = $state<string>();
@@ -27,19 +31,18 @@
 		pretriggered?: boolean;
 	}>();
 
-	async function getProducts(init?: true) {
-		const searchParams: { [key: string]: string } = {};
+	async function getProducts() {
+		const searchParams = new URLSearchParams();
 
 		const searchName = encodeURI(searchItemInput.trim());
 		if (searchName.length > 0) {
-			searchParams['name'] = searchName;
+			searchParams.set('name', searchName);
 		}
 
-		if (!init) {
-			replaceState(`?${new URLSearchParams(searchParams).toString()}`, {});
-		}
-
-		data = await products.get(searchParams);
+		goto(`?${searchParams.toString()}`, {
+			replaceState: true,
+			keepFocus: true
+		});
 	}
 
 	async function createProduct() {
@@ -54,18 +57,21 @@
 			data: [{ name: text }]
 		});
 
-		getProducts();
+		await invalidateSearch();
 	}
 
 	async function deleteProduct(id: string) {
 		await product.delete(id);
 
-		getProducts();
+		await invalidateSearch();
 	}
 
-	onMount(() => {
-		getProducts(true);
-	});
+	async function invalidateSearch() {
+		await invalidate(
+			products.url() +
+				(page.url.searchParams.size > 0 ? `?${page.url.searchParams.toString()}` : '')
+		);
+	}
 </script>
 
 <section class="page">
@@ -102,7 +108,7 @@
 
 	<Box>
 		<List>
-			{#if data && (data.data.length || 0) > 0}
+			{#if data.data.length > 0}
 				{#each data.data as item, itemIdx (item.id)}
 					<ListItem>
 						<SwipeSlot
@@ -151,10 +157,7 @@
 
 								{#snippet dropdown()}
 									{#if moreDropdownItem === item.id}
-										<div
-											class="dropdown"
-											style={`z-index: ${(data?.data.length || 0) + 10 - itemIdx}`}
-										>
+										<div class="dropdown" style={`z-index: ${data?.data.length + 10 - itemIdx}`}>
 											<Dropdown>
 												<div transition:unfoldHeight>
 													<List>
@@ -191,7 +194,11 @@
 				{/each}
 			{:else}
 				<ListItem>
-					<TextSlot />
+					<TextSlot fill>
+						<div class="not-found">
+							<i>no products found</i>
+						</div>
+					</TextSlot>
 				</ListItem>
 			{/if}
 		</List>
@@ -244,6 +251,9 @@
 	.page .dropdown {
 		position: relative;
 		margin-right: -1px;
+	}
+	.page .not-found {
+		text-align: center;
 	}
 	.page .add-item {
 		display: flex;

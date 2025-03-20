@@ -1,13 +1,9 @@
 import { del, get, host, patch, post, type DataParams } from '..';
 import type { Pagination } from '../types';
 
-export function productsUrl() {
+function productsUrl() {
 	return `${host}/api/products`;
 }
-
-export type ProductsSearchParams = {
-	name?: string;
-};
 
 export type ProductsRequest = {
 	data: {
@@ -33,11 +29,8 @@ export const products = {
 		return productsUrl();
 	},
 
-	get: (search?: ProductsSearchParams, params?: DataParams): Promise<ProductsResponse> => {
-		return get(
-			productsUrl() + (search ? `?${new URLSearchParams(search).toString()}` : ''),
-			params
-		);
+	get: (search?: URLSearchParams, params?: DataParams): Promise<ProductsResponse> => {
+		return get(productsUrl() + (search && search.size > 0 ? `?${search.toString()}` : ''), params);
 	},
 
 	post: (body: ProductsRequest, params?: DataParams): Promise<void> => {
@@ -45,7 +38,7 @@ export const products = {
 	}
 };
 
-export function productUrl(id: string) {
+function productUrl(id: string) {
 	return `${host}/api/products/${id}`;
 }
 
