@@ -32,6 +32,10 @@
 	button:active {
 		color: var(--element-color-200);
 	}
+	button:disabled {
+		color: var(--element-color-700);
+		cursor: default;
+	}
 	button.fill {
 		flex: 1;
 	}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto, invalidate } from '$app/navigation';
 	import { page } from '$app/state';
+	import Box from '$lib/components/boxes/box.svelte';
 	import { Breadcrumb, BreadcrumbTrail } from '$lib/components/breadcrumb';
 	import { Label, TextInput } from '$lib/components/form';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
@@ -42,14 +43,20 @@
 	</BreadcrumbTrail>
 
 	<div class="data">
-		<div class="input">
+		<div class="property">
 			<Label for="name">Name</Label>
-			<TextInput
-				id="name"
-				placeholder="name"
-				value={name}
-				oninput={(e) => (name = e.currentTarget.value.trim())}
-			/>
+			<div class="input">
+				<Box>
+					<div class="flex">
+						<TextInput
+							id="name"
+							placeholder={data.data.name}
+							value={name}
+							oninput={(e) => (name = e.currentTarget.value.trim())}
+						/>
+					</div>
+				</Box>
+			</div>
 		</div>
 	</div>
 
@@ -82,7 +89,14 @@
 		flex-direction: column;
 		gap: 1em;
 	}
-	.page .data .input {
+	.page .data .property {
+		display: flex;
+		gap: 0.5em;
+	}
+	.page .data .property .input {
+		flex: 1;
+	}
+	.page .data .property .input .flex {
 		display: flex;
 	}
 	.page .metadata {

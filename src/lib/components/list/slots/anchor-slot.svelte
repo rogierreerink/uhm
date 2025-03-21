@@ -19,7 +19,6 @@
 <style>
 	a {
 		all: unset;
-		flex: 1;
 		display: flex;
 		position: relative;
 		color: var(--element-color-400);

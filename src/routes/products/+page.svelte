@@ -11,11 +11,12 @@
 		SwipeSlot,
 		AnchorSlot
 	} from '$lib/components/list/slots';
-	import { MoreIcon, CheckIcon, DeleteIcon, AddIcon } from '$lib/components/icons';
+	import { MoreIcon, CheckIcon, DeleteIcon } from '$lib/components/icons';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { TextInput } from '$lib/components/form';
 	import { product, products, type ProductsResponse } from '$lib/data/products';
 	import { unfoldHeight } from '$lib/transitions';
+	import { Label } from '$lib/components/labels';
 
 	let {
 		data
@@ -109,98 +110,108 @@
 
 	<Box>
 		<List>
-			{#if data.data.length > 0}
-				{#each data.data as item, itemIdx (item.id)}
-					<ListItem>
-						<SwipeSlot
-							show={swipedItem?.resourceId === item.id ? swipedItem.area : undefined}
-							onshow={(area) => {
-								if (area === 'left')
-									swipedItem = {
-										resourceId: item.id,
-										area
-									};
-							}}
-							onpretrigger={() => {
-								if (swipedItem) {
-									swipedItem = { ...swipedItem, pretriggered: true };
-								}
-							}}
-							onpretriggerrevert={() => {
-								if (swipedItem) {
-									swipedItem = { ...swipedItem, pretriggered: false };
-								}
-							}}
-							ontrigger={() => {
-								if (swipedItem?.area === 'left') {
-									deleteProduct(item.id);
-								}
-								swipedItem = undefined;
-							}}
-							onclose={() => {
-								swipedItem = undefined;
-							}}
-						>
-							<AnchorSlot fill href={`/products/${item.id}`}>
-								<TextSlot fill>
-									{item.data.name}
+			{#each data.data as item, itemIdx (item.id)}
+				<ListItem>
+					<SwipeSlot
+						show={swipedItem?.resourceId === item.id ? swipedItem.area : undefined}
+						onshow={(area) => {
+							if (area === 'left')
+								swipedItem = {
+									resourceId: item.id,
+									area
+								};
+						}}
+						onpretrigger={() => {
+							if (swipedItem) {
+								swipedItem = { ...swipedItem, pretriggered: true };
+							}
+						}}
+						onpretriggerrevert={() => {
+							if (swipedItem) {
+								swipedItem = { ...swipedItem, pretriggered: false };
+							}
+						}}
+						ontrigger={() => {
+							if (swipedItem?.area === 'left') {
+								deleteProduct(item.id);
+							}
+							swipedItem = undefined;
+						}}
+						onclose={() => {
+							swipedItem = undefined;
+						}}
+					>
+						<AnchorSlot fill href={`/products/${item.id}`}>
+							<TextSlot fill>
+								{item.data.name}
+							</TextSlot>
+						</AnchorSlot>
+
+						{#if item.data.shopping_list_item_links.length > 0}
+							<AnchorSlot href="/">
+								<TextSlot>
+									<Label>{item.data.shopping_list_item_links.length} on shopping list</Label>
 								</TextSlot>
 							</AnchorSlot>
+						{/if}
 
-							<DropdownSlot position="to-left">
-								<ButtonSlot
-									onclick={() => {
-										moreDropdownItem = moreDropdownItem !== item.id ? item.id : undefined;
-									}}
-								>
-									<IconSlot>
-										<MoreIcon />
-									</IconSlot>
-								</ButtonSlot>
+						<DropdownSlot position="to-left">
+							<ButtonSlot
+								onclick={() => {
+									moreDropdownItem = moreDropdownItem !== item.id ? item.id : undefined;
+								}}
+							>
+								<IconSlot>
+									<MoreIcon />
+								</IconSlot>
+							</ButtonSlot>
 
-								{#snippet dropdown()}
-									{#if moreDropdownItem === item.id}
-										<div class="dropdown" style={`z-index: ${data?.data.length + 10 - itemIdx}`}>
-											<Dropdown>
-												<div transition:unfoldHeight>
-													<List>
-														<ListItem>
-															<AnchorSlot href={`/products/${item.id}`}>
-																<TextSlot>view</TextSlot>
-															</AnchorSlot>
-														</ListItem>
-														<ListItem>
-															<ButtonSlot
-																onclick={() => {
-																	deleteProduct(item.id);
-																	moreDropdownItem = undefined;
-																}}
-															>
-																<TextSlot>delete</TextSlot>
-															</ButtonSlot>
-														</ListItem>
-													</List>
-												</div>
-											</Dropdown>
-										</div>
-									{/if}
-								{/snippet}
-							</DropdownSlot>
-
-							{#snippet left()}
-								<ButtonSlot
-									onclick={() => {
-										deleteProduct(item.id);
-										swipedItem = undefined;
-									}}
-								>
-									<TextSlot>delete</TextSlot>
-								</ButtonSlot>
+							{#snippet dropdown()}
+								{#if moreDropdownItem === item.id}
+									<div class="dropdown" style={`z-index: ${data?.data.length + 10 - itemIdx}`}>
+										<Dropdown>
+											<div transition:unfoldHeight>
+												<List>
+													<ListItem>
+														<AnchorSlot href={`/products/${item.id}`} fill>
+															<TextSlot>view</TextSlot>
+														</AnchorSlot>
+													</ListItem>
+													<ListItem>
+														<ButtonSlot
+															onclick={() => {
+																deleteProduct(item.id);
+																moreDropdownItem = undefined;
+															}}
+															disabled={item.data.shopping_list_item_links.length > 0}
+															fill
+														>
+															<TextSlot>delete</TextSlot>
+														</ButtonSlot>
+													</ListItem>
+												</List>
+											</div>
+										</Dropdown>
+									</div>
+								{/if}
 							{/snippet}
-						</SwipeSlot>
-					</ListItem>
-				{/each}
-			{:else}
+						</DropdownSlot>
+
+						{#snippet left()}
+							<ButtonSlot
+								onclick={() => {
+									deleteProduct(item.id);
+									swipedItem = undefined;
+								}}
+							>
+								<TextSlot>delete</TextSlot>
+							</ButtonSlot>
+						{/snippet}
+					</SwipeSlot>
+				</ListItem>
+			{/each}
+
+			{#if data.data.length === 0}
 				<ListItem>
 					<TextSlot fill>
 						<div class="not-found">
