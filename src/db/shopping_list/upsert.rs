@@ -31,12 +31,12 @@ pub async fn upsert<'a>(
         .prepare_cached(
             "
             INSERT INTO public.shopping_list (id, in_cart, temp_item_id, product_link_id, ts_updated)
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, NULL)
             ON CONFLICT (id) DO UPDATE SET
                 in_cart = EXCLUDED.in_cart,
                 temp_item_id = EXCLUDED.temp_item_id,
                 product_link_id = EXCLUDED.product_link_id,
-                ts_updated = EXCLUDED.ts_updated
+                ts_updated = $5
             ",
         )
         .await
@@ -79,10 +79,10 @@ pub async fn upsert_temporary<'a>(
         .prepare_cached(
             "
             INSERT INTO public.shopping_list_temp_items (id, name, ts_updated)
-            VALUES ($1, $2, $3)
+            VALUES ($1, $2, NULL)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
-                ts_updated = EXCLUDED.ts_updated
+                ts_updated = $3
             ",
         )
         .await
@@ -116,10 +116,10 @@ pub async fn upsert_product_link<'a>(
         .prepare_cached(
             "
             INSERT INTO public.shopping_list_product_links (id, product_id, ts_updated)
-            VALUES ($1, $2, $3)
+            VALUES ($1, $2, NULL)
             ON CONFLICT (id) DO UPDATE SET
                 product_id = EXCLUDED.product_id,
-                ts_updated = EXCLUDED.ts_updated
+                ts_updated = $3
             ",
         )
         .await

@@ -29,10 +29,10 @@ pub async fn upsert<'a>(
         .prepare_cached(
             "
             INSERT INTO public.products (id, name, ts_updated)
-            VALUES ($1, $2, $3)
+            VALUES ($1, $2, NULL)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
-                ts_updated = EXCLUDED.ts_updated
+                ts_updated = $3
             ",
         )
         .await
