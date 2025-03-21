@@ -23,7 +23,7 @@
 		position: relative;
 		justify-content: center;
 		align-items: center;
-		color: var(--element-color-600);
+		color: var(--element-color-400);
 		cursor: pointer;
 	}
 	button:hover {

@@ -8,9 +8,10 @@
 		ButtonSlot,
 		IconSlot,
 		DropdownSlot,
-		SwipeSlot
+		SwipeSlot,
+		AnchorSlot
 	} from '$lib/components/list/slots';
-	import { MoreIcon, CheckIcon, DeleteIcon } from '$lib/components/icons';
+	import { MoreIcon, CheckIcon, DeleteIcon, AddIcon } from '$lib/components/icons';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { TextInput } from '$lib/components/form';
 	import { product, products, type ProductsResponse } from '$lib/data/products';
@@ -140,9 +141,11 @@
 								swipedItem = undefined;
 							}}
 						>
-							<TextSlot fill>
-								{item.data.name}
-							</TextSlot>
+							<AnchorSlot fill href={`/products/${item.id}`}>
+								<TextSlot fill>
+									{item.data.name}
+								</TextSlot>
+							</AnchorSlot>
 
 							<DropdownSlot position="to-left">
 								<ButtonSlot
@@ -161,6 +164,11 @@
 											<Dropdown>
 												<div transition:unfoldHeight>
 													<List>
+														<ListItem>
+															<AnchorSlot href={`/products/${item.id}`}>
+																<TextSlot>view</TextSlot>
+															</AnchorSlot>
+														</ListItem>
 														<ListItem>
 															<ButtonSlot
 																onclick={() => {

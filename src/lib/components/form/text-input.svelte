@@ -4,7 +4,15 @@
 	let props: HTMLInputAttributes = $props();
 </script>
 
-<input class="text" type="text" {...props} />
+<input
+	class="text"
+	type="text"
+	autocomplete="off"
+	data-1p-ignore
+	data-lpignore="true"
+	data-protonpass-ignore="true"
+	{...props}
+/>
 
 <style>
 	.text {

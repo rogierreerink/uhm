@@ -10,3 +10,5 @@ export { default as CircleIcon } from './circle-icon.svelte';
 export { default as MenuIcon } from './menu-icon.svelte';
 export { default as SquareIcon } from './square-icon.svelte';
 export { default as PointIcon } from './point-icon.svelte';
+export { default as ReloadIcon } from './reload-icon.svelte';
+export { default as UndoIcon } from './undo-icon.svelte';

@@ -43,15 +43,18 @@ function productUrl(id: string) {
 }
 
 export type ProductRequest = {
-	data: {
-		name?: string;
-	};
+	name?: string;
 };
 
 export type ProductResponse = {
 	id: string;
+	created: Date;
+	updated?: Date;
 	data: {
 		name: string;
+		shopping_list_item_links: {
+			id: string;
+		}[];
 	};
 };
 
@@ -60,8 +63,13 @@ export const product = {
 		return productUrl(id);
 	},
 
-	get: (id: string, params?: DataParams): Promise<ProductResponse> => {
-		return get(productUrl(id), params);
+	get: async (id: string, params?: DataParams): Promise<ProductResponse> => {
+		const data = await get<ProductResponse>(productUrl(id), params);
+		return {
+			...data,
+			created: new Date(data.created),
+			updated: data.updated && new Date(data.updated)
+		};
 	},
 
 	patch: (id: string, body: ProductRequest, params?: DataParams): Promise<void> => {

@@ -69,4 +69,9 @@
 		margin-left: 0.125em;
 		margin-right: -0.125em;
 	}
+	button:disabled {
+		color: var(--element-color-700);
+		margin: 0;
+		cursor: default;
+	}
 </style>

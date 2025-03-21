@@ -22,7 +22,7 @@
 		flex: 1;
 		display: flex;
 		position: relative;
-		color: var(--element-color-700);
+		color: var(--element-color-400);
 		cursor: pointer;
 	}
 	a:hover {
