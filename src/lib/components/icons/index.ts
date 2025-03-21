@@ -11,4 +11,6 @@ export { default as MenuIcon } from './menu-icon.svelte';
 export { default as SquareIcon } from './square-icon.svelte';
 export { default as PointIcon } from './point-icon.svelte';
 export { default as ReloadIcon } from './reload-icon.svelte';
+export { default as BasketAddIcon } from './basket-add-icon.svelte';
+export { default as BasketIcon } from './basket-icon.svelte';
 export { default as UndoIcon } from './undo-icon.svelte';

@@ -34,6 +34,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Products: {data.data.name.toLocaleLowerCase()}</title>
+</svelte:head>
+
 <section class="page">
 	<h1>{data.data.name}</h1>
 

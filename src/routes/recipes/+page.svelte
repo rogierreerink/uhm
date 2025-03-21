@@ -35,6 +35,10 @@
 	}>();
 </script>
 
+<svelte:head>
+	<title>Recipes</title>
+</svelte:head>
+
 <section class="page">
 	<h1>Recipes</h1>
 

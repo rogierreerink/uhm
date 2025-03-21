@@ -52,6 +52,10 @@
 	}>();
 </script>
 
+<svelte:head>
+	<title>Elements</title>
+</svelte:head>
+
 <section class="page">
 	<h1>Elements</h1>
 

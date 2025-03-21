@@ -47,7 +47,7 @@
 		</div>
 	</div>
 
-	<FixSpace style="bottom: 0; width 100%;">
+	<FixSpace style="inset: 0; top: auto;">
 		<div class="menu">
 			<MenuBar
 				collapsed={menuCollapsed}
@@ -86,7 +86,7 @@
 	}
 	.container .menu {
 		grid-area: menu;
-		width: 100vw;
+		width: 100%;
 		z-index: 100;
 	}
 </style>

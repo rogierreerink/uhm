@@ -18,6 +18,10 @@
 <style>
 	.checkbox {
 		position: relative;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		flex: 1;
 	}
 	.checkbox input {
 		all: unset;
@@ -27,7 +31,6 @@
 	}
 	.checkbox .checked-icon,
 	.checkbox .unchecked-icon {
-		flex: 1;
 		display: none;
 	}
 	.checkbox:has(input:checked) .checked-icon,

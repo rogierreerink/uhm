@@ -4,4 +4,5 @@ export { default as ButtonSlot } from './button-slot.svelte';
 export { default as AnchorSlot } from './anchor-slot.svelte';
 export { default as DropdownSlot } from './dropdown-slot.svelte';
 export { default as SwipeSlot } from './swipe-slot.svelte';
+export { default as SquareSlot } from './square-slot.svelte';
 export { default as Slot } from './slot.svelte';

@@ -7,52 +7,87 @@
 		IconSlot,
 		DropdownSlot,
 		SwipeSlot,
-		Slot
+		Slot,
+		SquareSlot
 	} from '$lib/components/list/slots';
 	import { MoreIcon, CheckIcon, AddIcon, SubstractIcon } from '$lib/components/icons';
 	import { Button } from '$lib/components/form/buttons';
 	import { CheckInput, TextInput } from '$lib/components/form';
 	import { unfoldHeight } from '$lib/transitions';
 	import { Label } from '$lib/components/labels';
+	import {
+		shoppingListItem,
+		shoppingListItems,
+		type ShoppingListItemsResponse
+	} from '$lib/data/shopping-list';
+	import { invalidate } from '$app/navigation';
 
-	const items = $state([
-		{ qty: '1', label: 'hi', isle: 'bloep', checked: true },
-		{ qty: '2', label: 'hey', isle: 'bloep', checked: true },
-		{ qty: '1', label: 'yo', isle: 'blep', checked: false },
-		{ qty: '500gr', label: 'yoo', isle: 'blop', checked: true },
-		{ qty: '1l', label: 'wow', isle: 'blup', checked: false },
-		{ qty: '1', label: 'wauw', isle: 'blup', checked: false },
-		{ qty: '1', label: 'hey', checked: false },
-		{ qty: '1', label: 'yo', checked: false },
-		{ qty: '1', label: 'yoo', checked: false },
-		{ qty: '1', label: 'wow', checked: false },
-		{ qty: '1', label: 'wauw', checked: false }
-	]);
+	let {
+		data
+	}: {
+		data: ShoppingListItemsResponse;
+	} = $props();
 
-	let qtyDropdownItem = $state<number>();
-	let moreDropdownItem = $state<number>();
+	let addItemInput = $state('');
+	let qtyDropdownItem = $state<string>();
+	let moreDropdownItem = $state<string>();
 	let swipedItem = $state<{
-		idx: number;
+		id: string;
 		area: 'left' | 'right';
 		pretriggered?: boolean;
-		trigger?: () => void;
 	}>();
+
+	async function createTemporaryItem() {
+		const text = addItemInput.trim();
+		if (text.length === 0) {
+			return;
+		}
+
+		addItemInput = '';
+
+		await shoppingListItems.post({
+			data: [
+				{
+					source: {
+						type: 'temporary',
+						data: { name: text }
+					}
+				}
+			]
+		});
+		await invalidate(shoppingListItems.url());
+	}
+
+	async function setInCart(id: string, inCart: boolean) {
+		await shoppingListItem.patch(id, { inCart });
+		await invalidate(shoppingListItem.url(id));
+		await invalidate(shoppingListItems.url());
+	}
+
+	async function deleteItem(id: string) {
+		await shoppingListItem.delete(id);
+		await invalidate(shoppingListItem.url(id));
+		await invalidate(shoppingListItems.url());
+	}
 </script>
+
+<svelte:head>
+	<title>Shopping list</title>
+</svelte:head>
 
 <section class="page">
 	<h1>Shopping list</h1>
 
 	<Box>
 		<List>
-			{#each items as item, itemIdx}
+			{#each data.data as item, itemIdx (item.id)}
 				<ListItem>
 					<SwipeSlot
-						show={swipedItem?.idx === itemIdx ? swipedItem.area : undefined}
+						show={swipedItem?.id === item.id ? swipedItem.area : undefined}
 						onshow={(area) => {
 							swipedItem = {
-								idx: itemIdx,
-								area,
-								trigger: area === 'right' ? () => (item.checked = !item.checked) : undefined
+								id: item.id,
+								area
 							};
 						}}
 						onpretrigger={() => {
@@ -66,14 +101,21 @@
 							}
 						}}
 						ontrigger={() => {
-							swipedItem?.trigger?.();
+							switch (swipedItem?.area) {
+								case 'left':
+									deleteItem(item.id);
+									break;
+								case 'right':
+									setInCart(item.id, !item.data.inCart);
+									break;
+							}
 							swipedItem = undefined;
 						}}
 						onclose={() => {
 							swipedItem = undefined;
 						}}
 					>
-						<DropdownSlot>
+						<!-- <DropdownSlot>
 							<ButtonSlot
 								onclick={() =>
 									(qtyDropdownItem = qtyDropdownItem !== itemIdx ? itemIdx : undefined)}
@@ -108,22 +150,22 @@
 									</div>
 								{/if}
 							{/snippet}
-						</DropdownSlot>
+						</DropdownSlot> -->
 
 						<TextSlot fill>
-							{item.label}
+							{item.data.source.data.name}
 						</TextSlot>
 
-						{#if item.isle}
+						<!-- {#if item.isle}
 							<TextSlot>
 								<Label>{item.isle}</Label>
 							</TextSlot>
-						{/if}
+						{/if} -->
 
 						<DropdownSlot position="to-left">
 							<ButtonSlot
 								onclick={() =>
-									(moreDropdownItem = moreDropdownItem !== itemIdx ? itemIdx : undefined)}
+									(moreDropdownItem = moreDropdownItem !== item.id ? item.id : undefined)}
 							>
 								<IconSlot>
 									<MoreIcon />
@@ -131,18 +173,13 @@
 							</ButtonSlot>
 
 							{#snippet dropdown()}
-								{#if moreDropdownItem === itemIdx}
-									<div class="dropdown" style={`z-index: ${items.length + 10 - itemIdx}`}>
+								{#if moreDropdownItem === item.id}
+									<div class="dropdown" style={`z-index: ${data.data.length + 10 - itemIdx}`}>
 										<Dropdown>
 											<div transition:unfoldHeight>
 												<List>
 													<ListItem>
-														<ButtonSlot>
-															<TextSlot>details</TextSlot>
-														</ButtonSlot>
-													</ListItem>
-													<ListItem>
-														<ButtonSlot>
+														<ButtonSlot onclick={() => deleteItem(item.id)}>
 															<TextSlot>delete</TextSlot>
 														</ButtonSlot>
 													</ListItem>
@@ -154,22 +191,23 @@
 							{/snippet}
 						</DropdownSlot>
 
-						<ButtonSlot onclick={(e) => (item.checked = !item.checked)}>
-							<IconSlot>
-								<CheckInput checked={item.checked} />
-							</IconSlot>
-						</ButtonSlot>
+						<SquareSlot>
+							<CheckInput
+								checked={item.data.inCart}
+								oninput={() => setInCart(item.id, !item.data.inCart)}
+							/>
+						</SquareSlot>
 
 						{#snippet left()}
-							<ButtonSlot>
+							<ButtonSlot onclick={() => deleteItem(item.id)}>
 								<TextSlot>delete</TextSlot>
 							</ButtonSlot>
 						{/snippet}
 
 						{#snippet right()}
-							<ButtonSlot onclick={() => (item.checked = !item.checked)}>
+							<ButtonSlot onclick={() => setInCart(item.id, !item.data.inCart)}>
 								<TextSlot>
-									{item.checked ? 'uncheck' : 'check'}
+									{item.data.inCart ? 'uncheck' : 'check'}
 								</TextSlot>
 							</ButtonSlot>
 						{/snippet}
@@ -183,11 +221,22 @@
 		<div class="input-box">
 			<Box>
 				<div class="input">
-					<TextInput placeholder="add item..." />
+					<TextInput
+						placeholder="add item..."
+						value={addItemInput}
+						oninput={(e) => {
+							addItemInput = e.currentTarget.value;
+						}}
+						onkeypress={(e) => {
+							if (e.key === 'Enter') {
+								createTemporaryItem();
+							}
+						}}
+					/>
 				</div>
 			</Box>
 		</div>
-		<Button>
+		<Button onclick={() => createTemporaryItem()}>
 			<CheckIcon />
 		</Button>
 	</div>
@@ -201,7 +250,7 @@
 	}
 	.page .dropdown {
 		position: relative;
-		margin-left: -1px;
+		margin-right: -1px;
 	}
 	.page .add-item {
 		display: flex;

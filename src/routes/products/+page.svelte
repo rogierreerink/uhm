@@ -11,12 +11,19 @@
 		SwipeSlot,
 		AnchorSlot
 	} from '$lib/components/list/slots';
-	import { MoreIcon, CheckIcon, DeleteIcon } from '$lib/components/icons';
+	import {
+		MoreIcon,
+		CheckIcon,
+		DeleteIcon,
+		BasketAddIcon,
+		BasketIcon
+	} from '$lib/components/icons';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { TextInput } from '$lib/components/form';
 	import { product, products, type ProductsResponse } from '$lib/data/products';
 	import { unfoldHeight } from '$lib/transitions';
 	import { Label } from '$lib/components/labels';
+	import { shoppingListItems } from '$lib/data/shopping-list';
 
 	let {
 		data
@@ -58,14 +65,13 @@
 		await products.post({
 			data: [{ name: text }]
 		});
-
 		await invalidateSearch();
 	}
 
 	async function deleteProduct(id: string) {
 		await product.delete(id);
-
 		await invalidateSearch();
+		await invalidate(product.url(id));
 	}
 
 	async function invalidateSearch() {
@@ -74,7 +80,27 @@
 				(page.url.searchParams.size > 0 ? `?${page.url.searchParams.toString()}` : '')
 		);
 	}
+
+	async function addToShoppingList(id: string) {
+		await shoppingListItems.post({
+			data: [
+				{
+					source: {
+						type: 'product',
+						id
+					}
+				}
+			]
+		});
+		await invalidateSearch();
+		await invalidate(product.url(id));
+		await invalidate(shoppingListItems.url());
+	}
 </script>
+
+<svelte:head>
+	<title>Products</title>
+</svelte:head>
 
 <section class="page">
 	<h1>Products</h1>
@@ -150,9 +176,15 @@
 						{#if item.data.shopping_list_item_links.length > 0}
 							<AnchorSlot href="/">
 								<TextSlot>
-									<Label>{item.data.shopping_list_item_links.length} on shopping list</Label>
+									<Label><BasketIcon /> {item.data.shopping_list_item_links.length}</Label>
 								</TextSlot>
 							</AnchorSlot>
+						{:else}
+							<ButtonSlot onclick={() => addToShoppingList(item.id)}>
+								<IconSlot>
+									<BasketAddIcon />
+								</IconSlot>
+							</ButtonSlot>
 						{/if}
 
 						<DropdownSlot position="to-left">
