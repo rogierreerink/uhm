@@ -9,7 +9,7 @@ use uuid::Uuid;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Resource {
-    in_cart: bool,
+    in_cart: Option<bool>,
     source: Source,
 }
 
@@ -88,7 +88,7 @@ pub async fn handle(
             &transaction,
             &upsert::Resource {
                 id: Uuid::new_v4(),
-                in_cart: item.in_cart,
+                in_cart: item.in_cart.unwrap_or(false),
                 source_id,
             },
         )
