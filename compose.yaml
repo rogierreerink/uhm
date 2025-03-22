@@ -11,6 +11,7 @@ services:
           path: ./Cargo.toml
     environment:
       RUST_LOG: "debug"
+      DB_HOST: "host.docker.internal"
     ports:
       - 3002:3002
     depends_on:

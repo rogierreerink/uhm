@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
 use axum::{
     http::{header, HeaderValue},
@@ -24,12 +24,14 @@ async fn main() {
     tracing::info!("starting application");
 
     let mut db_config = deadpool_postgres::Config::new();
-    db_config.user = Some("postgres".into());
-    db_config.password = Some("postgres".into());
-    db_config.dbname = Some("postgres".into());
-    // db_config.host = Some("localhost".into());
-    db_config.host = Some("host.docker.internal".into());
-    db_config.port = Some(5432);
+    db_config.user = Some(env::var("DB_USER").unwrap_or("postgres".into()));
+    db_config.password = Some(env::var("DB_PASSWORD").unwrap_or("postgres".into()));
+    db_config.dbname = Some(env::var("DB_NAME").unwrap_or("postgres".into()));
+    db_config.host = Some(env::var("DB_HOST").unwrap_or("localhost".into()));
+    db_config.port = Some(match env::var("DB_PORT") {
+        Ok(port) => u16::from_str_radix(&port, 10).unwrap(),
+        Err(_) => 5432,
+    });
 
     tracing::info!("creating database pool");
     let db_pool =
@@ -53,8 +55,12 @@ async fn main() {
             )),
         );
 
-    tracing::info!("binding to port {}", 3002);
-    let listener = match tokio::net::TcpListener::bind("0.0.0.0:3002").await {
+    let ip = env::var("LISTENER_IP").unwrap_or("0.0.0.0".into());
+    let port = env::var("LISTENER_PORT").unwrap_or("3002".into());
+    let address = format!("{}:{}", ip, port);
+
+    tracing::info!("binding to address {}", address);
+    let listener = match tokio::net::TcpListener::bind(address).await {
         Ok(listener) => listener,
         Err(err) => {
             tracing::error!("failed to bind to port: {}", err);
