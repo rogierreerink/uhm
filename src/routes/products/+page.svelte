@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto, invalidate } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Box, Dropdown } from '$lib/components/boxes';
+	import { Box, DropdownBox } from '$lib/components/boxes';
 	import { List, ListItem } from '$lib/components/list';
 	import {
 		TextSlot,
@@ -9,7 +9,10 @@
 		IconSlot,
 		DropdownSlot,
 		SwipeSlot,
-		AnchorSlot
+		AnchorSlot,
+		TextAnchorSlot,
+		IconButtonSlot,
+		TextButtonSlot
 	} from '$lib/components/list/slots';
 	import {
 		MoreIcon,
@@ -203,76 +206,66 @@
 							swipedItem = undefined;
 						}}
 					>
-						<AnchorSlot fill href={`/products/${item.id}`}>
-							<TextSlot fill>
-								{item.data.name}
-							</TextSlot>
-						</AnchorSlot>
+						<TextAnchorSlot fill href={`/products/${item.id}`}>
+							{item.data.name}
+						</TextAnchorSlot>
 
 						{#if item.data.shopping_list_item_links.length > 0}
-							<AnchorSlot href={`/?product-highlight=${item.id}`}>
-								<TextSlot>
-									<Label><BasketIcon /> {item.data.shopping_list_item_links.length}</Label>
-								</TextSlot>
-							</AnchorSlot>
+							<TextAnchorSlot href={`/?product-highlight=${item.id}`}>
+								<Label><BasketIcon /> {item.data.shopping_list_item_links.length}</Label>
+							</TextAnchorSlot>
 						{:else}
-							<ButtonSlot onclick={() => addToShoppingList(item.id)}>
-								<IconSlot>
-									<BasketAddIcon />
-								</IconSlot>
-							</ButtonSlot>
+							<IconButtonSlot onclick={() => addToShoppingList(item.id)}>
+								<BasketAddIcon />
+							</IconButtonSlot>
 						{/if}
 
 						<DropdownSlot position="to-left">
-							<ButtonSlot
+							<IconButtonSlot
 								onclick={() => {
 									moreDropdownItem = moreDropdownItem !== item.id ? item.id : undefined;
 								}}
 							>
-								<IconSlot>
-									<MoreIcon />
-								</IconSlot>
-							</ButtonSlot>
+								<MoreIcon />
+							</IconButtonSlot>
 
 							{#snippet dropdown()}
 								{#if moreDropdownItem === item.id}
 									<div class="dropdown" style={`z-index: ${data?.data.length + 10 - itemIdx}`}>
-										<Dropdown>
+										<DropdownBox>
 											<div transition:unfoldHeight>
 												<List>
 													<ListItem>
-														<AnchorSlot href={`/products/${item.id}`} fill>
-															<TextSlot fill>view</TextSlot>
-														</AnchorSlot>
+														<TextAnchorSlot href={`/products/${item.id}`} fill>view</TextAnchorSlot>
 													</ListItem>
 													<ListItem>
-														<ButtonSlot
+														<TextButtonSlot
 															onclick={() => {
 																confirmDeleteModal = product.get(item.id);
 																moreDropdownItem = undefined;
 															}}
 															fill
 														>
-															<TextSlot fill>delete</TextSlot>
-														</ButtonSlot>
+															delete
+														</TextButtonSlot>
 													</ListItem>
 												</List>
 											</div>
-										</Dropdown>
+										</DropdownBox>
 									</div>
 								{/if}
 							{/snippet}
 						</DropdownSlot>
 
 						{#snippet left()}
-							<ButtonSlot
+							<TextButtonSlot
 								onclick={() => {
 									confirmDeleteModal = product.get(item.id);
 									swipedItem = undefined;
 								}}
 							>
-								<TextSlot>delete</TextSlot>
-							</ButtonSlot>
+								delete
+							</TextButtonSlot>
 						{/snippet}
 					</SwipeSlot>
 				</ListItem>
@@ -343,29 +336,37 @@
 										await deleteShoppingListItems(data.id);
 										await deleteProduct(data.id);
 										confirmDeleteModal = undefined;
-									}}>Delete all</Button
+									}}
 								>
+									Delete all
+								</Button>
 								<Button
 									onclick={async () => {
 										await unlinkShoppingListItems(data.id);
 										await deleteProduct(data.id);
 										confirmDeleteModal = undefined;
-									}}>Unlink and delete</Button
+									}}
 								>
+									Unlink and delete
+								</Button>
 							{:else}
 								<Button
 									onclick={async () => {
 										await deleteProduct(data.id);
 										confirmDeleteModal = undefined;
-									}}>Delete</Button
+									}}
 								>
+									Delete
+								</Button>
 							{/if}
 
 							<Button
 								onclick={() => {
 									confirmDeleteModal = undefined;
-								}}>Cancel</Button
+								}}
 							>
+								Cancel
+							</Button>
 						</ButtonGroup>
 					{/snippet}
 				</Modal>

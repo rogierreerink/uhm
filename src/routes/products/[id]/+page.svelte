@@ -171,29 +171,37 @@
 								await deleteShoppingListItems();
 								await deleteProduct();
 								confirmDeleteModal = false;
-							}}>Delete all</Button
+							}}
 						>
+							Delete all
+						</Button>
 						<Button
 							onclick={async () => {
 								await unlinkShoppingListItems();
 								await deleteProduct();
 								confirmDeleteModal = false;
-							}}>Unlink and delete</Button
+							}}
 						>
+							Unlink and delete
+						</Button>
 					{:else}
 						<Button
 							onclick={async () => {
 								await deleteProduct();
 								confirmDeleteModal = false;
-							}}>Delete</Button
+							}}
 						>
+							Delete
+						</Button>
 					{/if}
 
 					<Button
 						onclick={() => {
 							confirmDeleteModal = false;
-						}}>Cancel</Button
+						}}
 					>
+						Cancel
+					</Button>
 				</ButtonGroup>
 			{/snippet}
 		</Modal>

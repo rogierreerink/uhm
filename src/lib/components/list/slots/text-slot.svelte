@@ -16,7 +16,6 @@
 
 <style>
 	.text {
-		all: unset;
 		display: flex;
 		flex-direction: column;
 		justify-content: center;

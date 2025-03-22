@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Box, Dropdown } from '$lib/components/boxes';
+	import { Box, DropdownBox } from '$lib/components/boxes';
 	import { List, ListItem } from '$lib/components/list';
 	import {
 		TextSlot,
@@ -8,7 +8,10 @@
 		DropdownSlot,
 		SwipeSlot,
 		SquareSlot,
-		AnchorSlot
+		AnchorSlot,
+		TextButtonSlot,
+		TextAnchorSlot,
+		IconButtonSlot
 	} from '$lib/components/list/slots';
 	import { MoreIcon, CheckIcon } from '$lib/components/icons';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
@@ -199,43 +202,42 @@
 						{/if}
 
 						<DropdownSlot position="to-left">
-							<ButtonSlot
-								onclick={() =>
-									(moreDropdownItem = moreDropdownItem !== item.id ? item.id : undefined)}
+							<IconButtonSlot
+								onclick={() => {
+									moreDropdownItem = moreDropdownItem !== item.id ? item.id : undefined;
+								}}
 							>
-								<IconSlot>
-									<MoreIcon />
-								</IconSlot>
-							</ButtonSlot>
+								<MoreIcon />
+							</IconButtonSlot>
 
 							{#snippet dropdown()}
 								{#if moreDropdownItem === item.id}
 									<div class="dropdown" style={`z-index: ${data.data.length + 10 - itemIdx}`}>
-										<Dropdown>
+										<DropdownBox>
 											<div transition:unfoldHeight>
 												<List>
 													{#if item.data.source.type === 'product'}
 														<ListItem>
-															<AnchorSlot href={`/products/${item.data.source.id}`} fill>
-																<TextSlot fill>view product</TextSlot>
-															</AnchorSlot>
+															<TextAnchorSlot href={`/products/${item.data.source.id}`} fill>
+																view product
+															</TextAnchorSlot>
 														</ListItem>
 													{/if}
 
 													<ListItem>
-														<ButtonSlot
+														<TextButtonSlot
 															onclick={() => {
 																confirmDeleteModal = shoppingListItem.get(item.id);
 																moreDropdownItem = undefined;
 															}}
 															fill
 														>
-															<TextSlot fill>delete</TextSlot>
-														</ButtonSlot>
+															delete
+														</TextButtonSlot>
 													</ListItem>
 												</List>
 											</div>
-										</Dropdown>
+										</DropdownBox>
 									</div>
 								{/if}
 							{/snippet}
@@ -326,13 +328,17 @@
 								onclick={async () => {
 									await deleteItem(data.id);
 									confirmDeleteModal = undefined;
-								}}>Delete</Button
+								}}
 							>
+								Delete
+							</Button>
 							<Button
 								onclick={() => {
 									confirmDeleteModal = undefined;
-								}}>Cancel</Button
+								}}
 							>
+								Cancel
+							</Button>
 						</ButtonGroup>
 					{/snippet}
 				</Modal>

@@ -1,5 +1,8 @@
 export { default as TextSlot } from './text-slot.svelte';
+export { default as TextAnchorSlot } from './text-anchor-slot.svelte';
+export { default as TextButtonSlot } from './text-button-slot.svelte';
 export { default as IconSlot } from './icon-slot.svelte';
+export { default as IconButtonSlot } from './icon-button-slot.svelte';
 export { default as ButtonSlot } from './button-slot.svelte';
 export { default as AnchorSlot } from './anchor-slot.svelte';
 export { default as DropdownSlot } from './dropdown-slot.svelte';
