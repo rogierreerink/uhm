@@ -1,6 +1,6 @@
 use crate::db::shopping_list::query;
 use crate::global::AppState;
-use crate::types::payloads::{CollectionResponse, ResourceResponse};
+use crate::types::payloads::{collection, resource};
 use axum::http::StatusCode;
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::Serialize;
@@ -54,7 +54,7 @@ pub async fn handle(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let data = match query::query(&transaction).await {
         Ok(items) => items
             .iter()
-            .map(|item| ResourceResponse {
+            .map(|item| resource::GetResponse {
                 id: item.id,
                 created: item.ts_created,
                 updated: item.ts_updated,
@@ -80,7 +80,7 @@ pub async fn handle(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         }
     };
 
-    Ok(Json(CollectionResponse {
+    Ok(Json(collection::GetResponse {
         pagination: None,
         data,
     }))

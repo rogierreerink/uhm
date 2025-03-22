@@ -1,6 +1,6 @@
 use crate::db::products::upsert;
 use crate::global::AppState;
-use crate::types::payloads::CollectionRequest;
+use crate::types::payloads::{collection, resource};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -13,7 +13,7 @@ pub struct Resource {
 
 pub async fn handle(
     State(state): State<Arc<AppState>>,
-    Json(payload): Json<CollectionRequest<Resource>>,
+    Json(payload): Json<collection::PostRequest<Resource>>,
 ) -> impl IntoResponse {
     tracing::debug!("setting up database connection");
     let mut connection = match state.db_pool.get().await {
@@ -33,12 +33,16 @@ pub async fn handle(
         }
     };
 
+    let mut resources = Vec::new();
+
     tracing::debug!("inserting resources");
     for item in payload.data {
+        let id = Uuid::new_v4();
+
         if let Err(err) = upsert::upsert(
             &transaction,
             &upsert::Resource {
-                id: Uuid::new_v4(),
+                id: id.clone(),
                 name: item.name.clone(),
             },
         )
@@ -47,6 +51,8 @@ pub async fn handle(
             tracing::error!("failed to insert resource: {}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
+
+        resources.push(resource::PostResponse { id })
     }
 
     tracing::debug!("committing database transaction");
@@ -55,5 +61,8 @@ pub async fn handle(
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
-    Ok(StatusCode::CREATED)
+    Ok((
+        StatusCode::CREATED,
+        Json(collection::PostResponse { data: resources }),
+    ))
 }

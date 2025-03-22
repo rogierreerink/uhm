@@ -1,7 +1,7 @@
 use crate::db::shopping_list::query;
 use crate::db::{shopping_list, DbError};
 use crate::global::AppState;
-use crate::types::payloads::ResourceResponse;
+use crate::types::payloads::resource::GetResponse;
 use axum::extract::Path;
 use axum::http::StatusCode;
 use axum::{extract::State, response::IntoResponse, Json};
@@ -55,7 +55,7 @@ pub async fn handle(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) ->
 
     tracing::debug!("querying resource");
     match shopping_list::query::query_one(&transaction, id).await {
-        Ok(item) => Ok(Json(ResourceResponse {
+        Ok(item) => Ok(Json(GetResponse {
             id: item.id,
             created: item.ts_created,
             updated: item.ts_updated,

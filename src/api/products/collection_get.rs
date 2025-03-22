@@ -1,6 +1,6 @@
 use crate::db::products::query;
 use crate::global::AppState;
-use crate::types::payloads::{CollectionResponse, ResourceResponse};
+use crate::types::payloads::{collection, resource};
 use axum::extract::Query;
 use axum::http::StatusCode;
 use axum::{extract::State, response::IntoResponse, Json};
@@ -45,7 +45,7 @@ pub async fn handle(
     let data = match query::query(&transaction, &search_query).await {
         Ok(items) => items
             .iter()
-            .map(|item| ResourceResponse {
+            .map(|item| resource::GetResponse {
                 id: item.id,
                 created: item.ts_created,
                 updated: item.ts_updated,
@@ -65,7 +65,7 @@ pub async fn handle(
         }
     };
 
-    Ok(Json(CollectionResponse {
+    Ok(Json(collection::GetResponse {
         pagination: None,
         data,
     }))
