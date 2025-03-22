@@ -5,8 +5,10 @@
 	import { Breadcrumb, BreadcrumbTrail } from '$lib/components/breadcrumb';
 	import { Label, TextInput } from '$lib/components/form';
 	import { Button, ButtonGroup, InlineButton } from '$lib/components/form/buttons';
-	import { AddIcon, CheckIcon, DeleteIcon, UndoIcon } from '$lib/components/icons';
+	import { CheckIcon, DeleteIcon, UndoIcon } from '$lib/components/icons';
+	import { Modal, ModalBackdrop } from '$lib/components/modal';
 	import product, { type GetResponse } from '$lib/data/products/resource';
+	import products from '$lib/data/products/collection';
 	import shoppingList from '$lib/data/shopping-list/collection';
 	import shoppingListItem from '$lib/data/shopping-list/resource';
 
@@ -18,10 +20,13 @@
 
 	let name = $state(data.data.name);
 	let hasChanged = $derived(name !== data.data.name);
+	let confirmDeleteModal = $state(false);
 
 	async function saveChanges() {
 		await product.patch(page.params.id, { name });
+		await invalidate(products.url());
 		await invalidate(product.url(page.params.id));
+		await invalidate(shoppingList.url());
 	}
 
 	async function revertChanges() {
@@ -37,6 +42,24 @@
 		await shoppingList.post({
 			data: [{ source: { type: 'product', id: data.id } }]
 		});
+		await invalidate(products.url());
+		await invalidate(product.url(data.id));
+		await invalidate(shoppingList.url());
+	}
+
+	async function unlinkShoppingListItems() {
+		const prod = await product.get(data.id);
+		for (const { id } of prod.data.shopping_list_item_links) {
+			await shoppingListItem.patch(id, {
+				source: {
+					type: 'temporary',
+					data: {
+						name: prod.data.name
+					}
+				}
+			});
+		}
+		await invalidate(products.url());
 		await invalidate(product.url(data.id));
 		await invalidate(shoppingList.url());
 	}
@@ -46,6 +69,7 @@
 			await shoppingListItem.delete(id);
 			await invalidate(shoppingListItem.url(id));
 		}
+		await invalidate(products.url());
 		await invalidate(product.url(data.id));
 		await invalidate(shoppingList.url());
 	}
@@ -106,10 +130,7 @@
 			<Button onclick={() => revertChanges()} disabled={!hasChanged}>
 				<UndoIcon /> revert
 			</Button>
-			<Button
-				onclick={() => deleteProduct()}
-				disabled={data.data.shopping_list_item_links.length > 0}
-			>
+			<Button onclick={() => (confirmDeleteModal = true)}>
 				<DeleteIcon /> delete
 			</Button>
 		</ButtonGroup>
@@ -120,6 +141,59 @@
 		<div>Updated: {data.updated?.toUTCString() ?? 'never'}</div>
 	</div>
 </section>
+
+{#if confirmDeleteModal}
+	<ModalBackdrop onclose={() => (confirmDeleteModal = false)}>
+		<Modal size="small">
+			<div class="confirmation-modal">
+				<div>
+					Are you sure you want to delete <i>{data.data.name}</i>?<br />
+				</div>
+
+				{#if data.data.shopping_list_item_links.length > 0}
+					<small>
+						The product is still on your shopping list. Press "unlink and delete" if you want to
+						keep it on your shopping list, but delete the product itself.
+					</small>
+				{/if}
+			</div>
+
+			{#snippet footer()}
+				<ButtonGroup>
+					{#if data.data.shopping_list_item_links.length > 0}
+						<Button
+							onclick={async () => {
+								await deleteShoppingListItems();
+								await deleteProduct();
+								confirmDeleteModal = false;
+							}}>Delete all</Button
+						>
+						<Button
+							onclick={async () => {
+								await unlinkShoppingListItems();
+								await deleteProduct();
+								confirmDeleteModal = false;
+							}}>Unlink and delete</Button
+						>
+					{:else}
+						<Button
+							onclick={async () => {
+								await deleteProduct();
+								confirmDeleteModal = false;
+							}}>Delete</Button
+						>
+					{/if}
+
+					<Button
+						onclick={() => {
+							confirmDeleteModal = false;
+						}}>Cancel</Button
+					>
+				</ButtonGroup>
+			{/snippet}
+		</Modal>
+	</ModalBackdrop>
+{/if}
 
 <style>
 	.page {
@@ -156,5 +230,11 @@
 		display: flex;
 		justify-content: end;
 		gap: 1em;
+	}
+	.confirmation-modal {
+		display: flex;
+		flex-direction: column;
+		padding: 0.9em 1.2em;
+		gap: 0.4em;
 	}
 </style>

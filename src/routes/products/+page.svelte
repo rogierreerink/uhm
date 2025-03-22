@@ -23,8 +23,10 @@
 	import { unfoldHeight } from '$lib/transitions';
 	import { Label } from '$lib/components/labels';
 	import shoppingList from '$lib/data/shopping-list/collection';
+	import shoppingListItem from '$lib/data/shopping-list/resource';
 	import products, { type GetResponse } from '$lib/data/products/collection';
-	import product from '$lib/data/products/resource';
+	import product, { type GetResponse as GetProductResponse } from '$lib/data/products/resource';
+	import { Modal, ModalBackdrop } from '$lib/components/modal';
 
 	let {
 		data
@@ -40,6 +42,8 @@
 		area: 'left' | 'right';
 		pretriggered?: boolean;
 	}>();
+
+	let confirmDeleteModal = $state<Promise<GetProductResponse>>();
 
 	async function getProducts() {
 		const searchParams = new URLSearchParams();
@@ -75,6 +79,23 @@
 		await invalidate(product.url(id));
 	}
 
+	async function unlinkShoppingListItems(id: string) {
+		const prod = await product.get(id);
+		for (const { id } of prod.data.shopping_list_item_links) {
+			await shoppingListItem.patch(id, {
+				source: {
+					type: 'temporary',
+					data: {
+						name: prod.data.name
+					}
+				}
+			});
+		}
+		await invalidate(products.url(page.url.searchParams));
+		await invalidate(product.url(id));
+		await invalidate(shoppingList.url());
+	}
+
 	async function addToShoppingList(id: string) {
 		await shoppingList.post({
 			data: [
@@ -86,6 +107,16 @@
 				}
 			]
 		});
+		await invalidate(products.url(page.url.searchParams));
+		await invalidate(product.url(id));
+		await invalidate(shoppingList.url());
+	}
+
+	async function deleteShoppingListItems(id: string) {
+		const prod = await product.get(id);
+		for (const { id } of prod.data.shopping_list_item_links) {
+			await shoppingListItem.delete(id);
+		}
 		await invalidate(products.url(page.url.searchParams));
 		await invalidate(product.url(id));
 		await invalidate(shoppingList.url());
@@ -153,7 +184,7 @@
 						}}
 						ontrigger={() => {
 							if (swipedItem?.area === 'left') {
-								deleteProduct(item.id);
+								confirmDeleteModal = product.get(item.id);
 							}
 							swipedItem = undefined;
 						}}
@@ -206,10 +237,9 @@
 													<ListItem>
 														<ButtonSlot
 															onclick={() => {
-																deleteProduct(item.id);
+																confirmDeleteModal = product.get(item.id);
 																moreDropdownItem = undefined;
 															}}
-															disabled={item.data.shopping_list_item_links.length > 0}
 															fill
 														>
 															<TextSlot fill>delete</TextSlot>
@@ -226,7 +256,7 @@
 						{#snippet left()}
 							<ButtonSlot
 								onclick={() => {
-									deleteProduct(item.id);
+									confirmDeleteModal = product.get(item.id);
 									swipedItem = undefined;
 								}}
 							>
@@ -274,6 +304,61 @@
 	</div>
 </section>
 
+{#if confirmDeleteModal}
+	<ModalBackdrop onclose={() => (confirmDeleteModal = undefined)}>
+		{#await confirmDeleteModal then data}
+			<Modal size="small">
+				<div class="confirmation-modal">
+					<div>
+						Are you sure you want to delete <i>{data.data.name}</i>?<br />
+					</div>
+
+					{#if data.data.shopping_list_item_links.length > 0}
+						<small>
+							The product is still on your shopping list. Press "unlink and delete" if you want to
+							keep it on your shopping list, but delete the product itself.
+						</small>
+					{/if}
+				</div>
+
+				{#snippet footer()}
+					<ButtonGroup>
+						{#if data.data.shopping_list_item_links.length > 0}
+							<Button
+								onclick={async () => {
+									await deleteShoppingListItems(data.id);
+									await deleteProduct(data.id);
+									confirmDeleteModal = undefined;
+								}}>Delete all</Button
+							>
+							<Button
+								onclick={async () => {
+									await unlinkShoppingListItems(data.id);
+									await deleteProduct(data.id);
+									confirmDeleteModal = undefined;
+								}}>Unlink and delete</Button
+							>
+						{:else}
+							<Button
+								onclick={async () => {
+									await deleteProduct(data.id);
+									confirmDeleteModal = undefined;
+								}}>Delete</Button
+							>
+						{/if}
+
+						<Button
+							onclick={() => {
+								confirmDeleteModal = undefined;
+							}}>Cancel</Button
+						>
+					</ButtonGroup>
+				{/snippet}
+			</Modal>
+		{/await}
+	</ModalBackdrop>
+{/if}
+
 <style>
 	.page {
 		display: flex;
@@ -309,5 +394,11 @@
 	}
 	.page .add-item .input-box .input {
 		display: flex;
+	}
+	.confirmation-modal {
+		display: flex;
+		flex-direction: column;
+		padding: 0.9em 1.2em;
+		gap: 0.4em;
 	}
 </style>

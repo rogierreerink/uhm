@@ -2,13 +2,15 @@
 	import type { Snippet } from 'svelte';
 
 	let {
-		children
+		children,
+		onclose
 	}: {
 		children?: Snippet;
+		onclose?: () => void;
 	} = $props();
 </script>
 
-<div class="backdrop">
+<div class="backdrop" onclick={() => onclose?.()} role="presentation">
 	{@render children?.()}
 </div>
 

@@ -4,19 +4,27 @@
 
 	let {
 		children,
-		footer
+		footer,
+		size = 'full'
 	}: {
 		children?: Snippet;
 		footer?: Snippet;
+		size?: 'full' | 'small';
 	} = $props();
+
+	const stopClickPropagation = {
+		onclick: (e: MouseEvent) => e.stopPropagation()
+	};
 </script>
 
-<div class="modal">
+<div class="modal" class:full={size === 'full'} class:small={size === 'small'}>
 	<Box>
-		{@render children?.()}
+		<div class="main" {...stopClickPropagation}>
+			{@render children?.()}
+		</div>
 	</Box>
 
-	<div class="footer">
+	<div class="footer" {...stopClickPropagation}>
 		{@render footer?.()}
 	</div>
 </div>
@@ -28,5 +36,13 @@
 		gap: 1em;
 		margin: 1em;
 		max-width: 800px;
+	}
+	.modal.small {
+		width: 100%;
+		max-width: 400px;
+	}
+	.modal .footer {
+		display: flex;
+		justify-content: end;
 	}
 </style>
