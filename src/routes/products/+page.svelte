@@ -1,15 +1,13 @@
 <script lang="ts">
 	import { goto, invalidate } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Box, DropdownBox } from '$lib/components/boxes';
+	import { Box } from '$lib/components/boxes';
 	import { List, ListItem } from '$lib/components/list';
 	import {
 		TextSlot,
-		ButtonSlot,
 		IconSlot,
 		DropdownSlot,
 		SwipeSlot,
-		AnchorSlot,
 		TextAnchorSlot,
 		IconButtonSlot,
 		TextButtonSlot
@@ -23,7 +21,6 @@
 	} from '$lib/components/icons';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { TextInput } from '$lib/components/form';
-	import { unfoldHeight } from '$lib/transitions';
 	import { Label } from '$lib/components/labels';
 	import shoppingList from '$lib/data/shopping-list/collection';
 	import shoppingListItem from '$lib/data/shopping-list/resource';
@@ -220,40 +217,35 @@
 							</IconButtonSlot>
 						{/if}
 
-						<DropdownSlot position="to-left">
-							<IconButtonSlot
-								onclick={() => {
-									moreDropdownItem = moreDropdownItem !== item.id ? item.id : undefined;
-								}}
-							>
+						<DropdownSlot
+							position="to-left"
+							show={moreDropdownItem === item.id}
+							zIndex={data?.data.length + 10 - itemIdx}
+							ontoggle={() => {
+								moreDropdownItem = moreDropdownItem !== item.id ? item.id : undefined;
+							}}
+						>
+							<IconSlot>
 								<MoreIcon />
-							</IconButtonSlot>
+							</IconSlot>
 
 							{#snippet dropdown()}
-								{#if moreDropdownItem === item.id}
-									<div class="dropdown" style={`z-index: ${data?.data.length + 10 - itemIdx}`}>
-										<DropdownBox>
-											<div transition:unfoldHeight>
-												<List>
-													<ListItem>
-														<TextAnchorSlot href={`/products/${item.id}`} fill>view</TextAnchorSlot>
-													</ListItem>
-													<ListItem>
-														<TextButtonSlot
-															onclick={() => {
-																confirmDeleteModal = product.get(item.id);
-																moreDropdownItem = undefined;
-															}}
-															fill
-														>
-															delete
-														</TextButtonSlot>
-													</ListItem>
-												</List>
-											</div>
-										</DropdownBox>
-									</div>
-								{/if}
+								<List>
+									<ListItem>
+										<TextAnchorSlot href={`/products/${item.id}`} fill>view</TextAnchorSlot>
+									</ListItem>
+									<ListItem>
+										<TextButtonSlot
+											onclick={() => {
+												confirmDeleteModal = product.get(item.id);
+												moreDropdownItem = undefined;
+											}}
+											fill
+										>
+											delete
+										</TextButtonSlot>
+									</ListItem>
+								</List>
 							{/snippet}
 						</DropdownSlot>
 
@@ -317,7 +309,7 @@
 				<Modal size="small">
 					<div class="confirmation-modal">
 						<div>
-							Are you sure you want to delete <i>{data.data.name}</i>?<br />
+							Are you sure you want to delete <i>{data.data.name}</i>?
 						</div>
 
 						{#if data.data.shopping_list_item_links.length > 0}
@@ -393,10 +385,6 @@
 	}
 	.page .search .button {
 		display: flex;
-	}
-	.page .dropdown {
-		position: relative;
-		margin-right: -1px;
 	}
 	.page .not-found {
 		text-align: center;

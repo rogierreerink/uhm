@@ -128,7 +128,7 @@
 	</div>
 
 	<div class="buttons">
-		<ButtonGroup orientation="horizontal">
+		<ButtonGroup>
 			<Button onclick={() => saveChanges()} disabled={!hasChanged}>
 				<CheckIcon /> save
 			</Button>
@@ -152,7 +152,7 @@
 		<Modal size="small">
 			<div class="confirmation-modal">
 				<div>
-					Are you sure you want to delete <i>{data.data.name}</i>?<br />
+					Are you sure you want to delete <i>{data.data.name}</i>?
 				</div>
 
 				{#if data.data.shopping_list_item_links.length > 0}

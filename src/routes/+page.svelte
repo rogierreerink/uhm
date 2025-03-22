@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Box, DropdownBox } from '$lib/components/boxes';
+	import { Box } from '$lib/components/boxes';
 	import { List, ListItem } from '$lib/components/list';
 	import {
 		TextSlot,
@@ -8,15 +8,12 @@
 		DropdownSlot,
 		SwipeSlot,
 		SquareSlot,
-		AnchorSlot,
 		TextButtonSlot,
-		TextAnchorSlot,
-		IconButtonSlot
+		TextAnchorSlot
 	} from '$lib/components/list/slots';
 	import { MoreIcon, CheckIcon } from '$lib/components/icons';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { CheckInput, TextInput } from '$lib/components/form';
-	import { unfoldHeight } from '$lib/transitions';
 	import shoppingList, { type GetResponse } from '$lib/data/shopping-list/collection';
 	import shoppingListItem, {
 		type GetResponse as GetItemResponse
@@ -201,45 +198,40 @@
 							</ButtonSlot>
 						{/if}
 
-						<DropdownSlot position="to-left">
-							<IconButtonSlot
-								onclick={() => {
-									moreDropdownItem = moreDropdownItem !== item.id ? item.id : undefined;
-								}}
-							>
+						<DropdownSlot
+							position="to-left"
+							show={moreDropdownItem === item.id}
+							zIndex={data?.data.length + 10 - itemIdx}
+							ontoggle={() => {
+								moreDropdownItem = moreDropdownItem !== item.id ? item.id : undefined;
+							}}
+						>
+							<IconSlot>
 								<MoreIcon />
-							</IconButtonSlot>
+							</IconSlot>
 
 							{#snippet dropdown()}
-								{#if moreDropdownItem === item.id}
-									<div class="dropdown" style={`z-index: ${data.data.length + 10 - itemIdx}`}>
-										<DropdownBox>
-											<div transition:unfoldHeight>
-												<List>
-													{#if item.data.source.type === 'product'}
-														<ListItem>
-															<TextAnchorSlot href={`/products/${item.data.source.id}`} fill>
-																view product
-															</TextAnchorSlot>
-														</ListItem>
-													{/if}
+								<List>
+									{#if item.data.source.type === 'product'}
+										<ListItem>
+											<TextAnchorSlot href={`/products/${item.data.source.id}`} fill>
+												view product
+											</TextAnchorSlot>
+										</ListItem>
+									{/if}
 
-													<ListItem>
-														<TextButtonSlot
-															onclick={() => {
-																confirmDeleteModal = shoppingListItem.get(item.id);
-																moreDropdownItem = undefined;
-															}}
-															fill
-														>
-															delete
-														</TextButtonSlot>
-													</ListItem>
-												</List>
-											</div>
-										</DropdownBox>
-									</div>
-								{/if}
+									<ListItem>
+										<TextButtonSlot
+											onclick={() => {
+												confirmDeleteModal = shoppingListItem.get(item.id);
+												moreDropdownItem = undefined;
+											}}
+											fill
+										>
+											delete
+										</TextButtonSlot>
+									</ListItem>
+								</List>
 							{/snippet}
 						</DropdownSlot>
 
@@ -251,22 +243,20 @@
 						</SquareSlot>
 
 						{#snippet left()}
-							<ButtonSlot
+							<TextButtonSlot
 								onclick={() => {
 									confirmDeleteModal = shoppingListItem.get(item.id);
 									swipedItem = undefined;
 								}}
 							>
-								<TextSlot>delete</TextSlot>
-							</ButtonSlot>
+								delete
+							</TextButtonSlot>
 						{/snippet}
 
 						{#snippet right()}
-							<ButtonSlot onclick={() => setInCart(item.id, !item.data.inCart)}>
-								<TextSlot>
-									{item.data.inCart ? 'uncheck' : 'check'}
-								</TextSlot>
-							</ButtonSlot>
+							<TextButtonSlot onclick={() => setInCart(item.id, !item.data.inCart)}>
+								{item.data.inCart ? 'uncheck' : 'check'}
+							</TextButtonSlot>
 						{/snippet}
 					</SwipeSlot>
 				</ListItem>
@@ -318,7 +308,7 @@
 				<Modal size="small">
 					<div class="confirmation-modal">
 						<div>
-							Are you sure you want to delete <i>{data.data.source.data.name}</i>?<br />
+							Are you sure you want to delete <i>{data.data.source.data.name}</i>?
 						</div>
 					</div>
 
@@ -355,10 +345,6 @@
 	}
 	.page .empty {
 		text-align: center;
-	}
-	.page .dropdown {
-		position: relative;
-		margin-right: -1px;
 	}
 	.page .add-item {
 		display: flex;

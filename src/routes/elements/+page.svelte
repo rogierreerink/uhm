@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Box, Dropdown } from '$lib/components/boxes';
+	import { Box } from '$lib/components/boxes';
 	import { List, ListItem } from '$lib/components/list';
 	import {
 		Slot,
@@ -7,7 +7,9 @@
 		ButtonSlot,
 		IconSlot,
 		DropdownSlot,
-		SwipeSlot
+		SwipeSlot,
+		IconButtonSlot,
+		TextButtonSlot
 	} from '$lib/components/list/slots';
 	import {
 		MoreIcon,
@@ -24,7 +26,6 @@
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { CheckInput, TextInput } from '$lib/components/form';
 	import { Modal, ModalBackdrop } from '$lib/components/modal';
-	import { unfoldHeight } from '$lib/transitions';
 	import { Label } from '$lib/components/labels';
 
 	const items = $state([
@@ -93,37 +94,29 @@
 						ontrigger={() => console.log('trigger')}
 						onclose={() => (showItemSwiped = undefined)}
 					>
-						<DropdownSlot>
-							<ButtonSlot
-								onclick={() =>
-									(showItemDropdown = showItemDropdown !== itemIdx ? itemIdx : undefined)}
-							>
-								<IconSlot>
-									<MoreIcon />
-								</IconSlot>
-							</ButtonSlot>
+						<DropdownSlot
+							show={showItemDropdown === itemIdx}
+							zIndex={items.length + 10 - itemIdx}
+							ontoggle={() =>
+								(showItemDropdown = showItemDropdown !== itemIdx ? itemIdx : undefined)}
+						>
+							<IconSlot>
+								<MoreIcon />
+							</IconSlot>
 
 							{#snippet dropdown()}
-								{#if showItemDropdown === itemIdx}
-									<div class="dropdown" style={`z-index: ${items.length + 10 - itemIdx}`}>
-										<Dropdown>
-											<div transition:unfoldHeight>
-												<List>
-													<ListItem>
-														<ButtonSlot>
-															<TextSlot>details</TextSlot>
-														</ButtonSlot>
-													</ListItem>
-													<ListItem>
-														<ButtonSlot>
-															<TextSlot>delete</TextSlot>
-														</ButtonSlot>
-													</ListItem>
-												</List>
-											</div>
-										</Dropdown>
-									</div>
-								{/if}
+								<List>
+									<ListItem>
+										<ButtonSlot>
+											<TextSlot>details</TextSlot>
+										</ButtonSlot>
+									</ListItem>
+									<ListItem>
+										<ButtonSlot>
+											<TextSlot>delete</TextSlot>
+										</ButtonSlot>
+									</ListItem>
+								</List>
 							{/snippet}
 						</DropdownSlot>
 
@@ -131,27 +124,21 @@
 							{item.label}
 						</TextSlot>
 
-						<ButtonSlot onclick={(e) => (item.checked = !item.checked)}>
-							<IconSlot>
-								<CheckInput checked={item.checked} />
-							</IconSlot>
-						</ButtonSlot>
+						<IconButtonSlot onclick={(e) => (item.checked = !item.checked)}>
+							<CheckInput checked={item.checked} />
+						</IconButtonSlot>
 
 						{#snippet left()}
-							<ButtonSlot>
-								<TextSlot>
-									{showItemSwiped?.pretriggered ? 'delete !' : 'delete'}
-								</TextSlot>
-							</ButtonSlot>
+							<TextButtonSlot>
+								{showItemSwiped?.pretriggered ? 'delete !' : 'delete'}
+							</TextButtonSlot>
 						{/snippet}
 
 						{#snippet right()}
-							<ButtonSlot>
-								<TextSlot>
-									{showItemSwiped?.pretriggered ? '!' : ''}
-									{item.checked ? 'uncheck' : 'check'}
-								</TextSlot>
-							</ButtonSlot>
+							<TextButtonSlot>
+								{showItemSwiped?.pretriggered ? '!' : ''}
+								{item.checked ? 'uncheck' : 'check'}
+							</TextButtonSlot>
 						{/snippet}
 					</SwipeSlot>
 				</ListItem>
@@ -169,16 +156,12 @@
 		<List>
 			{#each options as option, optionIdx}
 				<ListItem>
-					<ButtonSlot fill>
-						<TextSlot fill>
-							{option.label}
-						</TextSlot>
-					</ButtonSlot>
+					<TextButtonSlot fill>
+						{option.label}
+					</TextButtonSlot>
 					{#if optionIdx === 0}
 						<TextSlot>
-							<Label>
-								<ArrowIcon /> some label with icon
-							</Label>
+							<Label><ArrowIcon /> some label with icon</Label>
 						</TextSlot>
 						<TextSlot>
 							<Label>some label</Label>
@@ -303,10 +286,6 @@
 		display: flex;
 		justify-content: end;
 		gap: 0.5em;
-	}
-	.page .dropdown {
-		position: relative;
-		margin-left: -1px;
 	}
 	.page .search {
 		display: flex;
