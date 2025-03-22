@@ -71,21 +71,21 @@
 
 	async function convertToProduct(id: string) {
 		const item = await shoppingListItem.get(id);
-
-		if (item.data.source.type === 'product') {
+		if (!item.ok || item.data.data.source.type === 'product') {
 			return;
 		}
 
-		const product = (
-			await products.post({
-				data: [{ name: item.data.source.data.name }]
-			})
-		).data[0];
+		const product_post = await products.post({
+			data: [{ name: item.data.data.source.data.name }]
+		});
+		if (!product_post.ok) {
+			return;
+		}
 
 		await shoppingListItem.patch(id, {
 			source: {
 				type: 'product',
-				id: product.id
+				id: product_post.data.data[0].id
 			}
 		});
 		await invalidate(shoppingList.url());

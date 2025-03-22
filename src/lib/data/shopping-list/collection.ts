@@ -1,4 +1,4 @@
-import { get, host, post, type DataParams } from '..';
+import { get, host, post, type DataParams, type DataResponse } from '..';
 import type { Pagination } from '../types';
 
 function url() {
@@ -59,11 +59,11 @@ export default {
 		return url();
 	},
 
-	get: (params?: DataParams): Promise<GetResponse> => {
+	get: (params?: DataParams): Promise<DataResponse<GetResponse>> => {
 		return get(url(), params);
 	},
 
-	post: (body: PostRequest, params?: DataParams): Promise<PostResponse> => {
+	post: (body: PostRequest, params?: DataParams): Promise<DataResponse<PostResponse>> => {
 		return post(url(), body, params);
 	}
 };

@@ -48,17 +48,22 @@
 	}
 
 	async function unlinkShoppingListItems() {
-		const prod = await product.get(data.id);
-		for (const { id } of prod.data.shopping_list_item_links) {
+		const response = await product.get(data.id);
+		if (!response.ok) {
+			return;
+		}
+
+		for (const { id } of response.data.data.shopping_list_item_links) {
 			await shoppingListItem.patch(id, {
 				source: {
 					type: 'temporary',
 					data: {
-						name: prod.data.name
+						name: response.data.data.name
 					}
 				}
 			});
 		}
+
 		await invalidate(products.url());
 		await invalidate(product.url(data.id));
 		await invalidate(shoppingList.url());

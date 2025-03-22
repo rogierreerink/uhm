@@ -57,7 +57,11 @@
 				}}
 			>
 				{#each menu as item}
-					<MenuItem link={item.link} current={page.url.pathname === item.link}>
+					<MenuItem
+						link={item.link}
+						current={(item.link.length > 1 && page.url.pathname.startsWith(item.link)) ||
+							page.url.pathname === item.link}
+					>
 						{item.label}
 					</MenuItem>
 				{/each}

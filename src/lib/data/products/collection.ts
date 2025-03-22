@@ -1,4 +1,4 @@
-import { get, host, post, type DataParams } from '..';
+import { get, host, post, type DataParams, type DataResponse } from '..';
 import type { Pagination } from '../types';
 
 function url(searchParams: URLSearchParams = new URLSearchParams()) {
@@ -46,11 +46,14 @@ export default {
 		return url(searchParams);
 	},
 
-	get: (searchParams?: URLSearchParams, params?: DataParams): Promise<GetResponse> => {
+	get: (
+		searchParams?: URLSearchParams,
+		params?: DataParams
+	): Promise<DataResponse<GetResponse>> => {
 		return get(url(searchParams), params);
 	},
 
-	post: (body: PostRequest, params?: DataParams): Promise<PostResponse> => {
+	post: (body: PostRequest, params?: DataParams): Promise<DataResponse<PostResponse>> => {
 		return post(url(), body, params);
 	}
 };
