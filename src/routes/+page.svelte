@@ -11,15 +11,19 @@
 		AnchorSlot
 	} from '$lib/components/list/slots';
 	import { MoreIcon, CheckIcon } from '$lib/components/icons';
-	import { Button } from '$lib/components/form/buttons';
+	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { CheckInput, TextInput } from '$lib/components/form';
 	import { unfoldHeight } from '$lib/transitions';
 	import shoppingList, { type GetResponse } from '$lib/data/shopping-list/collection';
-	import shoppingListItem from '$lib/data/shopping-list/resource';
+	import shoppingListItem, {
+		type GetResponse as GetItemResponse
+	} from '$lib/data/shopping-list/resource';
 	import products from '$lib/data/products/collection';
 	import { invalidate } from '$app/navigation';
 	import { page } from '$app/state';
 	import Label from '$lib/components/labels/label.svelte';
+	import type { DataResponse } from '$lib/data';
+	import { Modal, ModalBackdrop } from '$lib/components/modal';
 
 	let {
 		data
@@ -35,6 +39,8 @@
 		area: 'left' | 'right';
 		pretriggered?: boolean;
 	}>();
+
+	let confirmDeleteModal = $state<Promise<DataResponse<GetItemResponse>>>();
 
 	async function createTemporaryItem() {
 		const text = addItemInput.trim();
@@ -60,13 +66,11 @@
 	async function setInCart(id: string, inCart: boolean) {
 		await shoppingListItem.patch(id, { inCart });
 		await invalidate(shoppingList.url());
-		await invalidate(shoppingListItem.url(id));
 	}
 
 	async function deleteItem(id: string) {
 		await shoppingListItem.delete(id);
 		await invalidate(shoppingList.url());
-		await invalidate(shoppingListItem.url(id));
 	}
 
 	async function convertToProduct(id: string) {
@@ -89,7 +93,6 @@
 			}
 		});
 		await invalidate(shoppingList.url());
-		await invalidate(shoppingListItem.url(id));
 	}
 </script>
 
@@ -125,7 +128,7 @@
 						ontrigger={() => {
 							switch (swipedItem?.area) {
 								case 'left':
-									deleteItem(item.id);
+									confirmDeleteModal = shoppingListItem.get(item.id);
 									break;
 								case 'right':
 									setInCart(item.id, !item.data.inCart);
@@ -218,8 +221,15 @@
 															</AnchorSlot>
 														</ListItem>
 													{/if}
+
 													<ListItem>
-														<ButtonSlot onclick={() => deleteItem(item.id)} fill>
+														<ButtonSlot
+															onclick={() => {
+																confirmDeleteModal = shoppingListItem.get(item.id);
+																moreDropdownItem = undefined;
+															}}
+															fill
+														>
 															<TextSlot fill>delete</TextSlot>
 														</ButtonSlot>
 													</ListItem>
@@ -239,7 +249,12 @@
 						</SquareSlot>
 
 						{#snippet left()}
-							<ButtonSlot onclick={() => deleteItem(item.id)}>
+							<ButtonSlot
+								onclick={() => {
+									confirmDeleteModal = shoppingListItem.get(item.id);
+									swipedItem = undefined;
+								}}
+							>
 								<TextSlot>delete</TextSlot>
 							</ButtonSlot>
 						{/snippet}
@@ -292,6 +307,40 @@
 	</div>
 </section>
 
+{#if confirmDeleteModal}
+	<ModalBackdrop onclose={() => (confirmDeleteModal = undefined)}>
+		{#await confirmDeleteModal then response}
+			{#if response.ok}
+				{@const data = response.data}
+
+				<Modal size="small">
+					<div class="confirmation-modal">
+						<div>
+							Are you sure you want to delete <i>{data.data.source.data.name}</i>?<br />
+						</div>
+					</div>
+
+					{#snippet footer()}
+						<ButtonGroup>
+							<Button
+								onclick={async () => {
+									await deleteItem(data.id);
+									confirmDeleteModal = undefined;
+								}}>Delete</Button
+							>
+							<Button
+								onclick={() => {
+									confirmDeleteModal = undefined;
+								}}>Cancel</Button
+							>
+						</ButtonGroup>
+					{/snippet}
+				</Modal>
+			{/if}
+		{/await}
+	</ModalBackdrop>
+{/if}
+
 <style>
 	.page {
 		display: flex;
@@ -324,5 +373,11 @@
 		10% {
 			color: white;
 		}
+	}
+	.confirmation-modal {
+		display: flex;
+		flex-direction: column;
+		padding: 0.9em 1.2em;
+		gap: 0.4em;
 	}
 </style>
