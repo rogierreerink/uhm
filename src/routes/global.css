@@ -312,3 +312,18 @@ h5,
 p {
 	margin: 0.8em 0.4em;
 }
+
+a {
+	all: unset;
+	cursor: pointer;
+}
+a:hover {
+	color: var(--theme-color-primary-300);
+}
+a:active {
+	color: var(--theme-color-primary-200);
+}
+a:disabled {
+	color: var(--theme-color-primary-600);
+	cursor: default;
+}
