@@ -7,25 +7,24 @@
 		IconSlot,
 		DropdownSlot,
 		SwipeSlot,
-		Slot,
-		SquareSlot
+		SquareSlot,
+		AnchorSlot
 	} from '$lib/components/list/slots';
-	import { MoreIcon, CheckIcon, AddIcon, SubstractIcon } from '$lib/components/icons';
+	import { MoreIcon, CheckIcon } from '$lib/components/icons';
 	import { Button } from '$lib/components/form/buttons';
 	import { CheckInput, TextInput } from '$lib/components/form';
 	import { unfoldHeight } from '$lib/transitions';
-	import { Label } from '$lib/components/labels';
-	import {
-		shoppingListItem,
-		shoppingListItems,
-		type ShoppingListItemsResponse
-	} from '$lib/data/shopping-list';
+	import shoppingList, { type GetResponse } from '$lib/data/shopping-list/collection';
+	import shoppingListItem from '$lib/data/shopping-list/resource';
+	import products from '$lib/data/products/collection';
 	import { invalidate } from '$app/navigation';
+	import { page } from '$app/state';
+	import Label from '$lib/components/labels/label.svelte';
 
 	let {
 		data
 	}: {
-		data: ShoppingListItemsResponse;
+		data: GetResponse;
 	} = $props();
 
 	let addItemInput = $state('');
@@ -45,7 +44,7 @@
 
 		addItemInput = '';
 
-		await shoppingListItems.post({
+		await shoppingList.post({
 			data: [
 				{
 					source: {
@@ -55,19 +54,42 @@
 				}
 			]
 		});
-		await invalidate(shoppingListItems.url());
+		await invalidate(shoppingList.url());
 	}
 
 	async function setInCart(id: string, inCart: boolean) {
 		await shoppingListItem.patch(id, { inCart });
+		await invalidate(shoppingList.url());
 		await invalidate(shoppingListItem.url(id));
-		await invalidate(shoppingListItems.url());
 	}
 
 	async function deleteItem(id: string) {
 		await shoppingListItem.delete(id);
+		await invalidate(shoppingList.url());
 		await invalidate(shoppingListItem.url(id));
-		await invalidate(shoppingListItems.url());
+	}
+
+	async function convertToProduct(id: string) {
+		const item = await shoppingListItem.get(id);
+
+		if (item.data.source.type === 'product') {
+			return;
+		}
+
+		const product = (
+			await products.post({
+				data: [{ name: item.data.source.data.name }]
+			})
+		).data[0];
+
+		await shoppingListItem.patch(id, {
+			source: {
+				type: 'product',
+				id: product.id
+			}
+		});
+		await invalidate(shoppingList.url());
+		await invalidate(shoppingListItem.url(id));
 	}
 </script>
 
@@ -153,7 +175,12 @@
 						</DropdownSlot> -->
 
 						<TextSlot fill>
-							{item.data.source.data.name}
+							<div
+								class:highlight={item.data.source.type === 'product' &&
+									item.data.source.id === page.url.searchParams.get('product-highlight')}
+							>
+								{item.data.source.data.name}
+							</div>
 						</TextSlot>
 
 						<!-- {#if item.isle}
@@ -161,6 +188,12 @@
 								<Label>{item.isle}</Label>
 							</TextSlot>
 						{/if} -->
+
+						{#if item.data.source.type === 'temporary'}
+							<ButtonSlot onclick={() => convertToProduct(item.id)}>
+								<Label>save as product</Label>
+							</ButtonSlot>
+						{/if}
 
 						<DropdownSlot position="to-left">
 							<ButtonSlot
@@ -178,9 +211,16 @@
 										<Dropdown>
 											<div transition:unfoldHeight>
 												<List>
+													{#if item.data.source.type === 'product'}
+														<ListItem>
+															<AnchorSlot href={`/products/${item.data.source.id}`} fill>
+																<TextSlot fill>view product</TextSlot>
+															</AnchorSlot>
+														</ListItem>
+													{/if}
 													<ListItem>
-														<ButtonSlot onclick={() => deleteItem(item.id)}>
-															<TextSlot>delete</TextSlot>
+														<ButtonSlot onclick={() => deleteItem(item.id)} fill>
+															<TextSlot fill>delete</TextSlot>
 														</ButtonSlot>
 													</ListItem>
 												</List>
@@ -214,6 +254,16 @@
 					</SwipeSlot>
 				</ListItem>
 			{/each}
+
+			{#if data.data.length === 0}
+				<ListItem>
+					<TextSlot fill>
+						<div class="empty">
+							<i>empty</i>
+						</div>
+					</TextSlot>
+				</ListItem>
+			{/if}
 		</List>
 	</Box>
 
@@ -248,6 +298,9 @@
 		flex-direction: column;
 		gap: 1em;
 	}
+	.page .empty {
+		text-align: center;
+	}
 	.page .dropdown {
 		position: relative;
 		margin-right: -1px;
@@ -261,5 +314,15 @@
 	}
 	.page .add-item .input-box .input {
 		display: flex;
+	}
+	.page .highlight {
+		animation-name: item-highlight;
+		animation-duration: 3s;
+		animation-timing-function: ease;
+	}
+	@keyframes item-highlight {
+		10% {
+			color: white;
+		}
 	}
 </style>

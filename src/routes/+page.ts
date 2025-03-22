@@ -1,8 +1,8 @@
-import { shoppingListItems } from '$lib/data/shopping-list';
+import shoppingList from '$lib/data/shopping-list/collection';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = async ({ url, fetch }) => {
-	return shoppingListItems.get(url.searchParams, {
+export const load: PageLoad = async ({ fetch }) => {
+	return shoppingList.get({
 		fetcher: fetch
 	});
 };

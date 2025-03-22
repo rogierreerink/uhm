@@ -20,15 +20,16 @@
 	} from '$lib/components/icons';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { TextInput } from '$lib/components/form';
-	import { product, products, type ProductsResponse } from '$lib/data/products';
 	import { unfoldHeight } from '$lib/transitions';
 	import { Label } from '$lib/components/labels';
-	import { shoppingListItems } from '$lib/data/shopping-list';
+	import shoppingList from '$lib/data/shopping-list/collection';
+	import products, { type GetResponse } from '$lib/data/products/collection';
+	import product from '$lib/data/products/resource';
 
 	let {
 		data
 	}: {
-		data: ProductsResponse;
+		data: GetResponse;
 	} = $props();
 
 	let searchItemInput = $state(page.url.searchParams.get('name') || '');
@@ -65,24 +66,17 @@
 		await products.post({
 			data: [{ name: text }]
 		});
-		await invalidateSearch();
+		await invalidate(products.url(page.url.searchParams));
 	}
 
 	async function deleteProduct(id: string) {
 		await product.delete(id);
-		await invalidateSearch();
+		await invalidate(products.url(page.url.searchParams));
 		await invalidate(product.url(id));
 	}
 
-	async function invalidateSearch() {
-		await invalidate(
-			products.url() +
-				(page.url.searchParams.size > 0 ? `?${page.url.searchParams.toString()}` : '')
-		);
-	}
-
 	async function addToShoppingList(id: string) {
-		await shoppingListItems.post({
+		await shoppingList.post({
 			data: [
 				{
 					source: {
@@ -92,9 +86,9 @@
 				}
 			]
 		});
-		await invalidateSearch();
+		await invalidate(products.url(page.url.searchParams));
 		await invalidate(product.url(id));
-		await invalidate(shoppingListItems.url());
+		await invalidate(shoppingList.url());
 	}
 </script>
 
@@ -174,7 +168,7 @@
 						</AnchorSlot>
 
 						{#if item.data.shopping_list_item_links.length > 0}
-							<AnchorSlot href="/">
+							<AnchorSlot href={`/?product-highlight=${item.id}`}>
 								<TextSlot>
 									<Label><BasketIcon /> {item.data.shopping_list_item_links.length}</Label>
 								</TextSlot>
@@ -206,7 +200,7 @@
 												<List>
 													<ListItem>
 														<AnchorSlot href={`/products/${item.id}`} fill>
-															<TextSlot>view</TextSlot>
+															<TextSlot fill>view</TextSlot>
 														</AnchorSlot>
 													</ListItem>
 													<ListItem>
@@ -218,7 +212,7 @@
 															disabled={item.data.shopping_list_item_links.length > 0}
 															fill
 														>
-															<TextSlot>delete</TextSlot>
+															<TextSlot fill>delete</TextSlot>
 														</ButtonSlot>
 													</ListItem>
 												</List>

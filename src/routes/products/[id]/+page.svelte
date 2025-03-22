@@ -6,12 +6,12 @@
 	import { Label, TextInput } from '$lib/components/form';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { CheckIcon, DeleteIcon, UndoIcon } from '$lib/components/icons';
-	import { product, type ProductResponse } from '$lib/data/products';
+	import product, { type GetResponse } from '$lib/data/products/resource';
 
 	let {
 		data
 	}: {
-		data: ProductResponse;
+		data: GetResponse;
 	} = $props();
 
 	let name = $state(data.data.name);

@@ -1,4 +1,4 @@
-import { product } from '$lib/data/products';
+import product from '$lib/data/products/resource';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ params, fetch }) => {
