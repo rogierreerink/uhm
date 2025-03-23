@@ -52,7 +52,7 @@ pub async fn handle(
     };
 
     tracing::debug!("querying resource");
-    let current = match query::query_one(&transaction, id).await {
+    let current = match query::query_one(&transaction, &id).await {
         Ok(item) => item,
         Err(err) if err == DbError::NotFound => {
             tracing::warn!("resource could not be found");

@@ -87,7 +87,7 @@ pub async fn query<'a>(
 
 pub async fn query_one<'a>(
     transaction: &'a Transaction<'a>,
-    id: Uuid,
+    id: &Uuid,
 ) -> Result<Resource, Error<DbError, tokio_postgres::Error>> {
     tracing::debug!("preparing cached statement");
     let stmt = match transaction
@@ -99,7 +99,7 @@ pub async fn query_one<'a>(
     };
 
     tracing::debug!("querying database");
-    match transaction.query(&stmt, &[&id]).await {
+    match transaction.query(&stmt, &[id]).await {
         Ok(rows) if rows.len() == 0 => Err(DbError::NotFound.into()),
         Ok(rows) if rows.len() >= 2 => Err(DbError::TooMany.into()),
         Ok(rows) => Ok((&rows[0]).into()),

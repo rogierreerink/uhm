@@ -28,7 +28,7 @@ pub async fn handle(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) ->
     };
 
     tracing::debug!("querying resource");
-    let resource = match query::query_one(&transaction, id).await {
+    let resource = match query::query_one(&transaction, &id).await {
         Ok(resource) => resource,
         Err(err) if err == DbError::NotFound => {
             tracing::warn!("resource could not be found");

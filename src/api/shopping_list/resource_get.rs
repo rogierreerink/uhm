@@ -54,7 +54,7 @@ pub async fn handle(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) ->
     };
 
     tracing::debug!("querying resource");
-    match shopping_list::query::query_one(&transaction, id).await {
+    match shopping_list::query::query_one(&transaction, &id).await {
         Ok(item) => Ok(Json(GetResponse {
             id: item.id,
             created: item.ts_created,
