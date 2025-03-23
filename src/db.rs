@@ -1,5 +1,6 @@
 use crate::types::error::Error;
 
+pub mod ingredient_collections;
 pub mod products;
 pub mod shopping_list;
 
