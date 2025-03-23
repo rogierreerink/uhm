@@ -20,6 +20,8 @@ export type GetResponse = {
 	pagination: Pagination;
 	data: {
 		id: string;
+		created: Date;
+		updated?: Date;
 		data: {
 			name: string;
 			shopping_list_item_links: {
@@ -46,11 +48,27 @@ export default {
 		return url(searchParams);
 	},
 
-	get: (
+	get: async (
 		searchParams?: URLSearchParams,
 		params?: DataParams
 	): Promise<DataResponse<GetResponse>> => {
-		return get(url(searchParams), params);
+		const response = await get<GetResponse>(url(searchParams), params);
+
+		if (!response.ok) {
+			return response;
+		}
+
+		return {
+			...response,
+			data: {
+				...response.data,
+				data: response.data.data.map((item) => ({
+					...item,
+					created: new Date(item.created),
+					updated: item.updated && new Date(item.updated)
+				}))
+			}
+		};
 	},
 
 	post: (body: PostRequest, params?: DataParams): Promise<DataResponse<PostResponse>> => {

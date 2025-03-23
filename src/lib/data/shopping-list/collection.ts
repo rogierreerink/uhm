@@ -59,8 +59,24 @@ export default {
 		return url();
 	},
 
-	get: (params?: DataParams): Promise<DataResponse<GetResponse>> => {
-		return get(url(), params);
+	get: async (params?: DataParams): Promise<DataResponse<GetResponse>> => {
+		const response = await get<GetResponse>(url(), params);
+
+		if (!response.ok) {
+			return response;
+		}
+
+		return {
+			...response,
+			data: {
+				...response.data,
+				data: response.data.data.map((item) => ({
+					...item,
+					created: new Date(item.created),
+					updated: item.updated && new Date(item.updated)
+				}))
+			}
+		};
 	},
 
 	post: (body: PostRequest, params?: DataParams): Promise<DataResponse<PostResponse>> => {
