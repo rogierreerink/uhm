@@ -14,12 +14,10 @@ pub struct SearchQuery {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Resource {
-    // Metadata
     pub id: Uuid,
     pub ts_created: DateTime<Utc>,
     pub ts_updated: Option<DateTime<Utc>>,
 
-    // Data
     pub name: String,
     pub shopping_list_item_links: Vec<ShoppingListItemLink>,
 }

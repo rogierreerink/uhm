@@ -11,7 +11,35 @@ use uuid::Uuid;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Resource {}
+pub struct Resource {
+    ingredient_links: Vec<IngredientLink>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IngredientLink {
+    id: Uuid,
+    data: IngredientData,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IngredientData {
+    product_link: ProductLink,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductLink {
+    id: Uuid,
+    data: ProductData,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductData {
+    name: String,
+}
 
 #[tracing::instrument(skip(state))]
 pub async fn handle(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> impl IntoResponse {
@@ -39,7 +67,23 @@ pub async fn handle(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) ->
             id: item.id,
             created: item.ts_created,
             updated: item.ts_updated,
-            data: Resource {},
+            data: Resource {
+                ingredient_links: item
+                    .ingredient_links
+                    .iter()
+                    .map(|ingredient| IngredientLink {
+                        id: ingredient.id,
+                        data: IngredientData {
+                            product_link: ProductLink {
+                                id: ingredient.data.product_link.id,
+                                data: ProductData {
+                                    name: ingredient.data.product_link.data.name.clone(),
+                                },
+                            },
+                        },
+                    })
+                    .collect(),
+            },
         })),
         Err(err) if err == DbError::NotFound => {
             tracing::warn!("resource could not be found");
