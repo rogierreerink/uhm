@@ -17,13 +17,13 @@ pub struct Resource {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum Source {
-    Product { id: Uuid, data: Product },
+    Product { id: Uuid, data: ProductData },
     Temporary { data: Temporary },
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Product {
+struct ProductData {
     name: String,
 }
 
@@ -65,7 +65,7 @@ pub async fn handle(State(state): State<Arc<AppState>>) -> impl IntoResponse {
                     source: match &item.source {
                         query::Source::ProductLink { product, .. } => Source::Product {
                             id: product.id.clone(),
-                            data: Product {
+                            data: ProductData {
                                 name: product.name.clone(),
                             },
                         },

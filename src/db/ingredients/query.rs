@@ -9,7 +9,7 @@ use uuid::Uuid;
 pub struct Resource {
     pub id: Uuid,
     pub ingredient_collection_id: Uuid,
-    pub product_id: Uuid,
+    pub product: Product,
     pub ts_created: DateTime<Utc>,
     pub ts_updated: Option<DateTime<Utc>>,
 }
@@ -19,9 +19,24 @@ impl From<&Row> for Resource {
         Self {
             id: row.get("id"),
             ingredient_collection_id: row.get("ingredient_collection_id"),
-            product_id: row.get("product_id"),
+            product: row.into(),
             ts_created: row.get("ts_created"),
             ts_updated: row.get("ts_updated"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Product {
+    pub id: Uuid,
+    pub name: String,
+}
+
+impl From<&Row> for Product {
+    fn from(row: &Row) -> Self {
+        Self {
+            id: row.get("product_id"),
+            name: row.get("product_name"),
         }
     }
 }
@@ -32,14 +47,7 @@ pub async fn query<'a>(
 ) -> Result<Vec<Resource>, Error<DbError, tokio_postgres::Error>> {
     tracing::debug!("preparing cached statement");
     let stmt = match transaction
-        .prepare_cached(
-            "
-            SELECT id, ingredient_collection_id, product_id, ts_created, ts_updated
-            FROM public.ingredients
-            WHERE ingredient_collection_id = $1
-            ORDER BY id
-            ",
-        )
+        .prepare_cached(include_str!("sql/query.sql"))
         .await
     {
         Ok(stmt) => stmt,
@@ -60,13 +68,7 @@ pub async fn query_one<'a>(
 ) -> Result<Resource, Error<DbError, tokio_postgres::Error>> {
     tracing::debug!("preparing cached statement");
     let stmt = match transaction
-        .prepare_cached(
-            "
-                SELECT id, ingredient_collection_id, product_id, ts_created, ts_updated
-                FROM public.ingredients
-                WHERE ingredient_collection_id = $1 AND id = $2
-            ",
-        )
+        .prepare_cached(include_str!("sql/query_one.sql"))
         .await
     {
         Ok(stmt) => stmt,

@@ -1,4 +1,5 @@
 use crate::db::ingredients::upsert;
+use crate::db::{ingredient_collections, DbError};
 use crate::global::AppState;
 use crate::types::payloads::{collection, resource};
 use axum::extract::Path;
@@ -10,12 +11,12 @@ use uuid::Uuid;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Resource {
-    product: Product,
+    product_link: ProductLink,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Product {
+pub struct ProductLink {
     id: Uuid,
 }
 
@@ -42,6 +43,19 @@ pub async fn handle(
         }
     };
 
+    tracing::debug!("querying parent collection");
+    match ingredient_collections::query::query_one(&transaction, &collection_id).await {
+        Ok(_) => {}
+        Err(err) if err == DbError::NotFound => {
+            tracing::error!("parent collection could not be found: {}", err);
+            return Err(StatusCode::NOT_FOUND);
+        }
+        Err(err) => {
+            tracing::error!("failed to query parent collection: {}", err);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
     let mut resources = Vec::new();
 
     tracing::debug!("inserting resources");
@@ -53,7 +67,7 @@ pub async fn handle(
             &upsert::Resource {
                 id: id.clone(),
                 ingredient_collection_id: collection_id,
-                product_id: item.product.id,
+                product_id: item.product_link.id,
             },
         )
         .await

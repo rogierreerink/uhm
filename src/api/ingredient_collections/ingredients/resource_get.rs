@@ -12,13 +12,20 @@ use uuid::Uuid;
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Resource {
-    product: Product,
+    product_link: ProductLink,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Product {
+pub struct ProductLink {
     id: Uuid,
+    data: ProductData,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductData {
+    name: String,
 }
 
 #[tracing::instrument(skip(state))]
@@ -51,8 +58,11 @@ pub async fn handle(
             created: item.ts_created,
             updated: item.ts_updated,
             data: Resource {
-                product: Product {
-                    id: item.product_id,
+                product_link: ProductLink {
+                    id: item.product.id,
+                    data: ProductData {
+                        name: item.product.name.clone(),
+                    },
                 },
             },
         })),

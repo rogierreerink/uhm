@@ -1,4 +1,5 @@
 use crate::db::ingredients::query;
+use crate::db::{ingredient_collections, DbError};
 use crate::global::AppState;
 use crate::types::payloads::{collection, resource};
 use axum::extract::Path;
@@ -11,13 +12,20 @@ use uuid::Uuid;
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Resource {
-    product: Product,
+    product_link: ProductLink,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Product {
+pub struct ProductLink {
     id: Uuid,
+    data: ProductData,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductData {
+    name: String,
 }
 
 pub async fn handle(
@@ -42,6 +50,19 @@ pub async fn handle(
         }
     };
 
+    tracing::debug!("querying parent collection");
+    match ingredient_collections::query::query_one(&transaction, &collection_id).await {
+        Ok(_) => {}
+        Err(err) if err == DbError::NotFound => {
+            tracing::error!("parent collection could not be found: {}", err);
+            return Err(StatusCode::NOT_FOUND);
+        }
+        Err(err) => {
+            tracing::error!("failed to query parent collection: {}", err);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
     tracing::debug!("querying collection");
     let data = match query::query(&transaction, &collection_id).await {
         Ok(items) => items
@@ -51,8 +72,11 @@ pub async fn handle(
                 created: item.ts_created,
                 updated: item.ts_updated,
                 data: Resource {
-                    product: Product {
-                        id: item.product_id,
+                    product_link: ProductLink {
+                        id: item.product.id,
+                        data: ProductData {
+                            name: item.product.name.clone(),
+                        },
                     },
                 },
             })
