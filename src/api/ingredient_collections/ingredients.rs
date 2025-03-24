@@ -12,7 +12,6 @@ use tower_http::set_header::SetResponseHeaderLayer;
 
 mod collection_get;
 mod collection_post;
-mod ingredients;
 mod resource_delete;
 mod resource_get;
 mod resource_patch;
@@ -55,9 +54,5 @@ pub fn create_router(state: Arc<AppState>) -> Router {
                         )),
                 )
                 .with_state(state.clone()),
-        )
-        .nest(
-            "/:id/ingredients",
-            ingredients::create_router(state.clone()),
         )
 }
