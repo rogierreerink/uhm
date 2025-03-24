@@ -7,6 +7,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Resource {
     name: String,
 }

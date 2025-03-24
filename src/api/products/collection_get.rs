@@ -9,12 +9,14 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Resource {
     name: String,
     shopping_list_item_links: Vec<ShoppingListItemLink>,
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ShoppingListItemLink {
     id: Uuid,
 }

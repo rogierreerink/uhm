@@ -23,6 +23,7 @@ enum Source {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Temporary {
     name: Option<String>,
 }
