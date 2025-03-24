@@ -10,12 +10,12 @@ use uuid::Uuid;
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Resource {
-    ingredient_links: Vec<IngredientLink>,
+    ingredients: Vec<Ingredient>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct IngredientLink {
+pub struct Ingredient {
     id: Uuid,
     data: IngredientData,
 }
@@ -23,12 +23,12 @@ pub struct IngredientLink {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IngredientData {
-    product_link: ProductLink,
+    product: Product,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProductLink {
+pub struct Product {
     id: Uuid,
     data: ProductData,
 }
@@ -67,16 +67,16 @@ pub async fn handle(State(state): State<Arc<AppState>>) -> impl IntoResponse {
                 created: item.ts_created,
                 updated: item.ts_updated,
                 data: Resource {
-                    ingredient_links: item
-                        .ingredient_links
+                    ingredients: item
+                        .ingredients
                         .iter()
-                        .map(|ingredient| IngredientLink {
+                        .map(|ingredient| Ingredient {
                             id: ingredient.id,
                             data: IngredientData {
-                                product_link: ProductLink {
-                                    id: ingredient.data.product_link.id,
+                                product: Product {
+                                    id: ingredient.product.id,
                                     data: ProductData {
-                                        name: ingredient.data.product_link.data.name.clone(),
+                                        name: ingredient.product.name.clone(),
                                     },
                                 },
                             },

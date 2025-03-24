@@ -10,29 +10,18 @@ pub struct Resource {
     pub id: Uuid,
     pub ts_created: DateTime<Utc>,
     pub ts_updated: Option<DateTime<Utc>>,
-
-    pub ingredient_links: Vec<IngredientLink>,
+    pub ingredients: Vec<Ingredient>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct IngredientLink {
+pub struct Ingredient {
     pub id: Uuid,
-    pub data: IngredientData,
+    pub product: Product,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct IngredientData {
-    pub product_link: ProductLink,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct ProductLink {
+pub struct Product {
     pub id: Uuid,
-    pub data: ProductData,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct ProductData {
     pub name: String,
 }
 
@@ -56,19 +45,15 @@ impl From<Vec<Row>> for QueryResult {
                                 id: row.get("id"),
                                 ts_created: row.get("ts_created"),
                                 ts_updated: row.get("ts_updated"),
-                                ingredient_links: vec![],
+                                ingredients: vec![],
                             });
 
                             if let Some(id) = row.get("ingredient_id") {
-                                resource.ingredient_links.push(IngredientLink {
+                                resource.ingredients.push(Ingredient {
                                     id,
-                                    data: IngredientData {
-                                        product_link: ProductLink {
-                                            id: row.get("product_id"),
-                                            data: ProductData {
-                                                name: row.get("product_name"),
-                                            },
-                                        },
+                                    product: Product {
+                                        id: row.get("product_id"),
+                                        name: row.get("product_name"),
                                     },
                                 });
                             }

@@ -11,12 +11,12 @@ use uuid::Uuid;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Resource {
-    product_link: ProductLink,
+    product: Product,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProductLink {
+pub struct Product {
     id: Uuid,
 }
 
@@ -67,7 +67,7 @@ pub async fn handle(
             &upsert::Resource {
                 id: id.clone(),
                 ingredient_collection_id: collection_id,
-                product_id: item.product_link.id,
+                product_id: item.product.id,
             },
         )
         .await

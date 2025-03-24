@@ -11,12 +11,12 @@ use uuid::Uuid;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Resource {
-    product_link: Option<ProductLink>,
+    product: Option<Product>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProductLink {
+pub struct Product {
     id: Uuid,
 }
 
@@ -63,8 +63,8 @@ pub async fn handle(
         &upsert::Resource {
             id,
             ingredient_collection_id: current.ingredient_collection_id,
-            product_id: match payload.product_link {
-                Some(product_link) => product_link.id,
+            product_id: match payload.product {
+                Some(product) => product.id,
                 None => current.product.id,
             },
         },

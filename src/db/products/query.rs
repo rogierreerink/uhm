@@ -17,7 +17,6 @@ pub struct Resource {
     pub id: Uuid,
     pub ts_created: DateTime<Utc>,
     pub ts_updated: Option<DateTime<Utc>>,
-
     pub name: String,
     pub shopping_list_item_links: Vec<ShoppingListItemLink>,
 }
