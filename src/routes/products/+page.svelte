@@ -86,7 +86,7 @@
 			return;
 		}
 
-		for (const { id } of response.data.data.shopping_list_item_links) {
+		for (const { id } of response.data.data.shoppingListItemLinks) {
 			await shoppingListItem.patch(id, {
 				source: {
 					type: 'temporary',
@@ -124,7 +124,7 @@
 			return;
 		}
 
-		for (const { id } of response.data.data.shopping_list_item_links) {
+		for (const { id } of response.data.data.shoppingListItemLinks) {
 			await shoppingListItem.delete(id);
 		}
 
@@ -207,9 +207,9 @@
 							{item.data.name}
 						</TextAnchorSlot>
 
-						{#if item.data.shopping_list_item_links.length > 0}
+						{#if item.data.shoppingListItemLinks.length > 0}
 							<TextAnchorSlot href={`/?product-highlight=${item.id}`}>
-								<Label><BasketIcon /> {item.data.shopping_list_item_links.length}</Label>
+								<Label><BasketIcon /> {item.data.shoppingListItemLinks.length}</Label>
 							</TextAnchorSlot>
 						{:else}
 							<IconButtonSlot onclick={() => addToShoppingList(item.id)}>
@@ -312,7 +312,7 @@
 							Are you sure you want to delete <i>{data.data.name}</i>?
 						</div>
 
-						{#if data.data.shopping_list_item_links.length > 0}
+						{#if data.data.shoppingListItemLinks.length > 0}
 							<small>
 								The product is still on your shopping list. Press "unlink and delete" if you want to
 								keep it on your shopping list, but delete the product itself.
@@ -322,7 +322,7 @@
 
 					{#snippet footer()}
 						<ButtonGroup>
-							{#if data.data.shopping_list_item_links.length > 0}
+							{#if data.data.shoppingListItemLinks.length > 0}
 								<Button
 									onclick={async () => {
 										await deleteShoppingListItems(data.id);

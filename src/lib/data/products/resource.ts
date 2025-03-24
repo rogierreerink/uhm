@@ -10,7 +10,7 @@ export type GetResponse = {
 	updated?: Date;
 	data: {
 		name: string;
-		shopping_list_item_links: {
+		shoppingListItemLinks: {
 			id: string;
 		}[];
 	};
