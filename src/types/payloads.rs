@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 pub mod collection {
@@ -12,9 +11,9 @@ pub mod collection {
     }
 
     #[derive(Serialize)]
-    pub struct GetResponse<I, D> {
+    pub struct GetResponse<D> {
         pub pagination: Option<Pagination>,
-        pub data: Vec<resource::GetResponse<I, D>>,
+        pub data: Vec<D>,
     }
 
     #[derive(Deserialize)]
@@ -23,24 +22,7 @@ pub mod collection {
     }
 
     #[derive(Serialize)]
-    pub struct PostResponse<I> {
-        pub data: Vec<resource::PostResponse<I>>,
-    }
-}
-
-pub mod resource {
-    use super::*;
-
-    #[derive(Serialize)]
-    pub struct GetResponse<I, D> {
-        pub id: I,
-        pub created: DateTime<Utc>,
-        pub updated: Option<DateTime<Utc>>,
-        pub data: D,
-    }
-
-    #[derive(Serialize)]
-    pub struct PostResponse<I> {
-        pub id: I,
+    pub struct PostResponse<D> {
+        pub data: Vec<D>,
     }
 }

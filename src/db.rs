@@ -10,8 +10,9 @@ pub mod ingredients;
 pub mod products;
 pub mod shopping_list;
 
+#[trait_variant::make(Send)]
 pub trait Db {
-    async fn blocks(&mut self) -> Result<impl blocks2::DbBlocks, DbError>;
+    async fn blocks(&self) -> Result<impl blocks2::DbBlocks, DbError>;
 }
 
 pub struct DbPostgres {
@@ -23,7 +24,7 @@ impl DbPostgres {
         Self { pool }
     }
 
-    async fn get_connection(&mut self) -> Result<Object<Manager>, DbError> {
+    async fn get_connection(&self) -> Result<Object<Manager>, DbError> {
         tracing::debug!("waiting for database connection");
         match self.pool.get().await {
             Ok(conn) => Ok(conn),
@@ -36,7 +37,7 @@ impl DbPostgres {
 }
 
 impl Db for DbPostgres {
-    async fn blocks(&mut self) -> Result<impl blocks2::DbBlocks, DbError> {
+    async fn blocks(&self) -> Result<impl blocks2::DbBlocks, DbError> {
         Ok(blocks2::DbBlocksPostgres::new(self.get_connection().await?))
     }
 }
@@ -47,6 +48,7 @@ pub enum DbError {
     Query,
     NotFound,
     TooMany,
+    InvalidOperation,
 }
 
 impl std::fmt::Display for DbError {
@@ -56,6 +58,7 @@ impl std::fmt::Display for DbError {
             DbError::Query => write!(f, "failed to query database"),
             DbError::NotFound => write!(f, "resource could not be found"),
             DbError::TooMany => write!(f, "query returned too many results"),
+            DbError::InvalidOperation => write!(f, "operation may not be performed"),
         }
     }
 }

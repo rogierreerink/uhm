@@ -4,7 +4,8 @@ use axum::{
     http::{header, HeaderValue},
     Router,
 };
-use global::AppState;
+use db::DbPostgres;
+use global::{AppDb, AppState};
 use tower::ServiceBuilder;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tracing_subscriber::{filter::EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -43,7 +44,9 @@ async fn main() {
             }
         };
 
-    let app_state = Arc::new(AppState { db_pool });
+    let app_state = Arc::new(AppState {
+        db: AppDb::Postgres(DbPostgres::new(db_pool)),
+    });
 
     tracing::info!("setting up routes");
     let app = Router::new()
