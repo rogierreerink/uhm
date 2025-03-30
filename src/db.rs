@@ -4,7 +4,6 @@ use deadpool_postgres::Manager;
 use crate::types::error::Error;
 
 pub mod blocks;
-pub mod blocks2;
 pub mod ingredient_collections;
 pub mod ingredients;
 pub mod products;
@@ -12,7 +11,7 @@ pub mod shopping_list;
 
 #[trait_variant::make(Send)]
 pub trait Db {
-    async fn blocks(&self) -> Result<impl blocks2::DbBlocks, DbError>;
+    async fn blocks(&self) -> Result<impl blocks::DbBlocks, DbError>;
 }
 
 pub struct DbPostgres {
@@ -30,22 +29,21 @@ impl DbPostgres {
             Ok(conn) => Ok(conn),
             Err(err) => {
                 tracing::error!("failed to get a connection from the pool: {}", err);
-                return Err(DbError::Connection);
+                return Err(DbError::Error);
             }
         }
     }
 }
 
 impl Db for DbPostgres {
-    async fn blocks(&self) -> Result<impl blocks2::DbBlocks, DbError> {
-        Ok(blocks2::DbBlocksPostgres::new(self.get_connection().await?))
+    async fn blocks(&self) -> Result<impl blocks::DbBlocks, DbError> {
+        Ok(blocks::DbBlocksPostgres::new(self.get_connection().await?))
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DbError {
-    Connection,
-    Query,
+    Error,
     NotFound,
     TooMany,
     InvalidOperation,
@@ -54,8 +52,7 @@ pub enum DbError {
 impl std::fmt::Display for DbError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            DbError::Connection => write!(f, "failed to setup database connection"),
-            DbError::Query => write!(f, "failed to query database"),
+            DbError::Error => write!(f, "database error"),
             DbError::NotFound => write!(f, "resource could not be found"),
             DbError::TooMany => write!(f, "query returned too many results"),
             DbError::InvalidOperation => write!(f, "operation may not be performed"),
