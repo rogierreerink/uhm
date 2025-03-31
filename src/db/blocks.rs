@@ -427,7 +427,7 @@ impl DbBlocks for DbBlocksPostgres {
         tracing::debug!("starting database transaction");
         let transaction = self.connection.transaction().await?;
 
-        tracing::debug!("select current block: preparing cached statement");
+        tracing::debug!("get current block: preparing cached statement");
         let stmt = transaction
             .prepare_cached(
                 "
@@ -451,7 +451,7 @@ impl DbBlocks for DbBlocksPostgres {
             )
             .await?;
 
-        tracing::debug!("select current block: executing query");
+        tracing::debug!("get current block: executing query");
         let current = match transaction.query(&stmt, &[&id]).await? {
             rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
             rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
