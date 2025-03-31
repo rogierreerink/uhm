@@ -1,3 +1,4 @@
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use deadpool::managed::Object;
 use deadpool_postgres::Manager;
@@ -9,11 +10,11 @@ use super::DbError;
 
 #[trait_variant::make(Send)]
 pub trait DbBlocks {
-    async fn get(&mut self) -> Result<Vec<BlockSummary>, DbError>;
-    async fn get_by_id(&mut self, id: &Uuid) -> Result<Block, DbError>;
-    async fn create(&mut self, blocks: &Vec<BlockNew>) -> Result<Vec<Block>, DbError>;
-    async fn update(&mut self, id: &Uuid, block: &BlockUpdate) -> Result<Block, DbError>;
-    async fn delete(&mut self, id: &Uuid) -> Result<(), DbError>;
+    async fn get(&mut self) -> Result<Vec<BlockSummary>>;
+    async fn get_by_id(&mut self, id: &Uuid) -> Result<Block>;
+    async fn create(&mut self, blocks: &Vec<BlockNew>) -> Result<Vec<Block>>;
+    async fn update(&mut self, id: &Uuid, block: &BlockUpdate) -> Result<Block>;
+    async fn delete(&mut self, id: &Uuid) -> Result<()>;
 }
 
 #[derive(Serialize)]
@@ -219,9 +220,9 @@ impl DbBlocksPostgres {
 }
 
 impl DbBlocks for DbBlocksPostgres {
-    async fn get(&mut self) -> Result<Vec<BlockSummary>, DbError> {
+    async fn get(&mut self) -> Result<Vec<BlockSummary>> {
         tracing::debug!("preparing cached statement");
-        let stmt = match self
+        let stmt = self
             .connection
             .prepare_cached(
                 "
@@ -243,30 +244,23 @@ impl DbBlocks for DbBlocksPostgres {
                 ORDER BY blocks.id
                 "
             )
-            .await
-        {
-            Ok(stmt) => stmt,
-            Err(err) => {
-                tracing::error!("failed to prepare statement: {}", err);
-                return Err(DbError::Error);
-            }
-        };
+            .await?;
 
         tracing::debug!("executing query");
-        let result = match self.connection.query(&stmt, &[]).await {
-            Ok(rows) => rows.into_iter().map(|row| (&row).into()).collect(),
-            Err(err) => {
-                tracing::error!("failed to query database: {}", err);
-                return Err(DbError::Error);
-            }
-        };
+        let result = self
+            .connection
+            .query(&stmt, &[])
+            .await?
+            .into_iter()
+            .map(|row| (&row).into())
+            .collect();
 
         Ok(result)
     }
 
-    async fn get_by_id(&mut self, id: &Uuid) -> Result<Block, DbError> {
+    async fn get_by_id(&mut self, id: &Uuid) -> Result<Block> {
         tracing::debug!("preparing cached statement");
-        let stmt = match self
+        let stmt = self
             .connection
             .prepare_cached(
                 "
@@ -288,51 +282,34 @@ impl DbBlocks for DbBlocksPostgres {
                 WHERE blocks.id = $1
                 ",
             )
-            .await
-        {
-            Ok(stmt) => stmt,
-            Err(err) => {
-                tracing::error!("failed to prepare statement: {}", err);
-                return Err(DbError::Error);
-            }
-        };
+            .await?;
 
         tracing::debug!("executing query");
-        let result = match self.connection.query(&stmt, &[&id]).await {
-            Ok(rows) if rows.len() == 0 => return Err(DbError::NotFound),
-            Ok(rows) if rows.len() >= 2 => return Err(DbError::TooMany),
-            Ok(rows) => (&rows[0]).into(),
-            Err(err) => {
-                tracing::error!("failed to query database: {}", err);
-                return Err(DbError::Error);
-            }
+        let result = match self.connection.query(&stmt, &[&id]).await? {
+            rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
+            rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
+            rows => (&rows[0]).into(),
         };
 
         Ok(result)
     }
 
-    async fn create(&mut self, blocks: &Vec<BlockNew>) -> Result<Vec<Block>, DbError> {
+    async fn create(&mut self, blocks: &Vec<BlockNew>) -> Result<Vec<Block>> {
         tracing::debug!("starting database transaction");
-        let transaction = match self.connection.transaction().await {
-            Ok(transaction) => transaction,
-            Err(err) => {
-                tracing::error!("failed to start database transaction: {}", err);
-                return Err(DbError::Error);
-            }
-        };
+        let transaction = self.connection.transaction().await?;
 
-        let mut inserted_blocks = Vec::new();
+        let mut inserted = Vec::new();
 
         for block in blocks {
             let block_id = Uuid::new_v4();
             let block_kind_id = Uuid::new_v4();
 
-            inserted_blocks.push(match &block.kind {
+            inserted.push(match &block.kind {
                 BlockNewKind::IngredientCollection { id } => {
                     tracing::debug!(
                         "create ingredient collection block: preparing cached statement"
                     );
-                    let stmt = match transaction
+                    let stmt = transaction
                         .prepare_cached(
                             "
                             INSERT INTO public.ingredient_collection_blocks (
@@ -344,26 +321,13 @@ impl DbBlocks for DbBlocksPostgres {
                             )
                             ",
                         )
-                        .await
-                    {
-                        Ok(stmt) => stmt,
-                        Err(err) => {
-                            tracing::error!("failed to prepare statement: {}", err);
-                            return Err(DbError::Error);
-                        }
-                    };
+                        .await?;
 
                     tracing::debug!("create ingredient collection block: executing query");
-                    match transaction.execute(&stmt, &[&block_kind_id, &id]).await {
-                        Ok(_) => {}
-                        Err(err) => {
-                            tracing::error!("failed to query database: {}", err);
-                            return Err(DbError::Error);
-                        }
-                    }
+                    transaction.execute(&stmt, &[&block_kind_id, &id]).await?;
 
                     tracing::debug!("create block: preparing cached statement");
-                    let stmt = match transaction
+                    let stmt = transaction
                         .prepare_cached(
                             "
                             INSERT INTO public.blocks (
@@ -376,40 +340,28 @@ impl DbBlocks for DbBlocksPostgres {
                             RETURNING ts_created
                             ",
                         )
-                        .await
-                    {
-                        Ok(stmt) => stmt,
-                        Err(err) => {
-                            tracing::error!("failed to prepare statement: {}", err);
-                            return Err(DbError::Error);
-                        }
-                    };
+                        .await?;
 
                     tracing::debug!("create block: executing query");
-                    match transaction
+                    let row = transaction
                         .query_one(&stmt, &[&block_id, &block_kind_id])
-                        .await
-                    {
-                        Ok(row) => Block {
-                            id: block_id,
-                            ts_created: row.get("ts_created"),
-                            ts_updated: None,
-                            data: BlockData {
-                                kind: BlockKind::IngredientCollection {
-                                    id: *id,
-                                    data: IngredientCollectionData {},
-                                },
+                        .await?;
+
+                    Block {
+                        id: block_id,
+                        ts_created: row.get("ts_created"),
+                        ts_updated: None,
+                        data: BlockData {
+                            kind: BlockKind::IngredientCollection {
+                                id: *id,
+                                data: IngredientCollectionData {},
                             },
                         },
-                        Err(err) => {
-                            tracing::error!("failed to query database: {}", err);
-                            return Err(DbError::Error);
-                        }
                     }
                 }
                 BlockNewKind::Paragraph { data } => {
                     tracing::debug!("create paragraph block: preparing cached statement");
-                    let stmt = match transaction
+                    let stmt = transaction
                         .prepare_cached(
                             "
                             INSERT INTO public.paragraph_blocks (
@@ -421,29 +373,15 @@ impl DbBlocks for DbBlocksPostgres {
                             )
                             ",
                         )
-                        .await
-                    {
-                        Ok(stmt) => stmt,
-                        Err(err) => {
-                            tracing::error!("failed to prepare statement: {}", err);
-                            return Err(DbError::Error);
-                        }
-                    };
+                        .await?;
 
                     tracing::debug!("create paragraph block: executing query");
-                    match transaction
+                    transaction
                         .execute(&stmt, &[&block_kind_id, &data.text])
-                        .await
-                    {
-                        Ok(_) => {}
-                        Err(err) => {
-                            tracing::error!("failed to query database: {}", err);
-                            return Err(DbError::Error);
-                        }
-                    }
+                        .await?;
 
                     tracing::debug!("create block: preparing cached statement");
-                    let stmt = match transaction
+                    let stmt = transaction
                         .prepare_cached(
                             "
                             INSERT INTO public.blocks (
@@ -456,62 +394,41 @@ impl DbBlocks for DbBlocksPostgres {
                             RETURNING ts_created
                             ",
                         )
-                        .await
-                    {
-                        Ok(stmt) => stmt,
-                        Err(err) => {
-                            tracing::error!("failed to prepare statement: {}", err);
-                            return Err(DbError::Error);
-                        }
-                    };
+                        .await?;
 
                     tracing::debug!("create block: executing query");
-                    match transaction
+                    let row = transaction
                         .query_one(&stmt, &[&block_id, &block_kind_id])
-                        .await
-                    {
-                        Ok(row) => Block {
-                            id: block_id,
-                            ts_created: row.get("ts_created"),
-                            ts_updated: None,
-                            data: BlockData {
-                                kind: BlockKind::Paragraph {
-                                    data: ParagraphData {
-                                        text: data.text.clone(),
-                                    },
+                        .await?;
+
+                    Block {
+                        id: block_id,
+                        ts_created: row.get("ts_created"),
+                        ts_updated: None,
+                        data: BlockData {
+                            kind: BlockKind::Paragraph {
+                                data: ParagraphData {
+                                    text: data.text.clone(),
                                 },
                             },
                         },
-                        Err(err) => {
-                            tracing::error!("failed to query database: {}", err);
-                            return Err(DbError::Error);
-                        }
                     }
                 }
             })
         }
 
         tracing::debug!("committing database transaction");
-        if let Err(err) = transaction.commit().await {
-            tracing::error!("failed to commit transaction: {}", err);
-            return Err(DbError::Error);
-        }
+        transaction.commit().await?;
 
-        Ok(inserted_blocks)
+        Ok(inserted)
     }
 
-    async fn update(&mut self, id: &Uuid, block: &BlockUpdate) -> Result<Block, DbError> {
+    async fn update(&mut self, id: &Uuid, block: &BlockUpdate) -> Result<Block> {
         tracing::debug!("starting database transaction");
-        let transaction = match self.connection.transaction().await {
-            Ok(transaction) => transaction,
-            Err(err) => {
-                tracing::error!("failed to start database transaction: {}", err);
-                return Err(DbError::Error);
-            }
-        };
+        let transaction = self.connection.transaction().await?;
 
         tracing::debug!("select current block: preparing cached statement");
-        let stmt = match transaction
+        let stmt = transaction
             .prepare_cached(
                 "
                 SELECT
@@ -532,69 +449,41 @@ impl DbBlocks for DbBlocksPostgres {
                 WHERE blocks.id = $1
                 ",
             )
-            .await
-        {
-            Ok(stmt) => stmt,
-            Err(err) => {
-                tracing::error!("failed to prepare statement: {}", err);
-                return Err(DbError::Error);
-            }
-        };
+            .await?;
 
         tracing::debug!("select current block: executing query");
-        let current = match transaction.query(&stmt, &[&id]).await {
-            Ok(rows) if rows.len() == 0 => return Err(DbError::NotFound),
-            Ok(rows) if rows.len() >= 2 => return Err(DbError::TooMany),
-            Ok(rows) => rows[0].clone(),
-            Err(err) => {
-                tracing::error!("failed to query database: {}", err);
-                return Err(DbError::Error);
-            }
+        let current = match transaction.query(&stmt, &[&id]).await? {
+            rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
+            rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
+            rows => rows[0].clone(),
         };
 
         let updated_block_kind = match &block.kind {
             Some(BlockUpdateKind::IngredientCollection { id }) => {
                 let block_id: Uuid = match current.get("ingredient_collection_block_id") {
                     Some(id) => id,
-                    None => {
-                        tracing::error!("block type cannot be changed");
-                        return Err(DbError::InvalidOperation);
-                    }
+                    None => return Err(DbError::InvalidOperation.into()),
                 };
 
                 tracing::debug!("update ingredient collection block: executing query");
-                let stmt = match transaction
+                let stmt = transaction
                     .prepare_cached(
                         "
-                                UPDATE public.ingredient_collection_blocks
-                                SET ingredient_collection_id = $2,
-                                    ts_updated = CURRENT_TIMESTAMP
-                                WHERE id = $1
-                                ",
+                        UPDATE public.ingredient_collection_blocks
+                        SET ingredient_collection_id = $2,
+                            ts_updated = CURRENT_TIMESTAMP
+                        WHERE id = $1
+                        ",
                     )
-                    .await
-                {
-                    Ok(stmt) => stmt,
-                    Err(err) => {
-                        tracing::error!("failed to prepare statement: {}", err);
-                        return Err(DbError::Error);
-                    }
-                };
+                    .await?;
 
                 let ingredient_collection_id =
                     id.unwrap_or(current.get("ingredient_collection_id"));
 
                 tracing::debug!("update ingredient collection block: executing query");
-                match transaction
+                transaction
                     .execute(&stmt, &[&block_id, &ingredient_collection_id])
-                    .await
-                {
-                    Ok(_) => {}
-                    Err(err) => {
-                        tracing::error!("failed to query database: {}", err);
-                        return Err(DbError::Error);
-                    }
-                }
+                    .await?;
 
                 BlockKind::IngredientCollection {
                     id: ingredient_collection_id,
@@ -605,30 +494,20 @@ impl DbBlocks for DbBlocksPostgres {
             Some(BlockUpdateKind::Paragraph { data }) => {
                 let block_id: Uuid = match current.get("paragraph_block_id") {
                     Some(id) => id,
-                    None => {
-                        tracing::error!("block type cannot be changed");
-                        return Err(DbError::InvalidOperation);
-                    }
+                    None => return Err(DbError::InvalidOperation.into()),
                 };
 
                 tracing::debug!("update paragraph block: executing query");
-                let stmt = match transaction
+                let stmt = transaction
                     .prepare_cached(
                         "
-                                UPDATE public.paragraph_blocks
-                                SET text = $2,
-                                    ts_updated = CURRENT_TIMESTAMP
-                                WHERE id = $1
-                                ",
+                        UPDATE public.paragraph_blocks
+                        SET text = $2,
+                            ts_updated = CURRENT_TIMESTAMP
+                        WHERE id = $1
+                        ",
                     )
-                    .await
-                {
-                    Ok(stmt) => stmt,
-                    Err(err) => {
-                        tracing::error!("failed to prepare statement: {}", err);
-                        return Err(DbError::Error);
-                    }
-                };
+                    .await?;
 
                 let text = data
                     .as_ref()
@@ -636,13 +515,7 @@ impl DbBlocks for DbBlocksPostgres {
                     .unwrap_or(current.get("paragraph_block_text"));
 
                 tracing::debug!("update paragraph block: executing query");
-                match transaction.execute(&stmt, &[&block_id, &text]).await {
-                    Ok(_) => {}
-                    Err(err) => {
-                        tracing::error!("failed to query database: {}", err);
-                        return Err(DbError::Error);
-                    }
-                }
+                transaction.execute(&stmt, &[&block_id, &text]).await?;
 
                 BlockKind::Paragraph {
                     data: ParagraphData { text },
@@ -653,7 +526,7 @@ impl DbBlocks for DbBlocksPostgres {
         };
 
         tracing::debug!("update block: executing query");
-        let stmt = match transaction
+        let stmt = transaction
             .prepare_cached(
                 "
                 UPDATE public.blocks
@@ -661,29 +534,13 @@ impl DbBlocks for DbBlocksPostgres {
                 WHERE id = $1
                 ",
             )
-            .await
-        {
-            Ok(stmt) => stmt,
-            Err(err) => {
-                tracing::error!("failed to prepare statement: {}", err);
-                return Err(DbError::Error);
-            }
-        };
+            .await?;
 
         tracing::debug!("update block: executing query");
-        match transaction.execute(&stmt, &[&id]).await {
-            Ok(_) => {}
-            Err(err) => {
-                tracing::error!("failed to query database: {}", err);
-                return Err(DbError::Error);
-            }
-        }
+        transaction.execute(&stmt, &[&id]).await?;
 
         tracing::debug!("committing database transaction");
-        if let Err(err) = transaction.commit().await {
-            tracing::error!("failed to commit transaction: {}", err);
-            return Err(DbError::Error);
-        }
+        transaction.commit().await?;
 
         Ok(Block {
             id: current.get("id"),
@@ -695,18 +552,12 @@ impl DbBlocks for DbBlocksPostgres {
         })
     }
 
-    async fn delete(&mut self, id: &Uuid) -> Result<(), DbError> {
+    async fn delete(&mut self, id: &Uuid) -> Result<()> {
         tracing::debug!("starting database transaction");
-        let transaction = match self.connection.transaction().await {
-            Ok(transaction) => transaction,
-            Err(err) => {
-                tracing::error!("failed to start database transaction: {}", err);
-                return Err(DbError::Error);
-            }
-        };
+        let transaction = self.connection.transaction().await?;
 
         tracing::debug!("delete block: preparing cached statement");
-        let stmt = match transaction
+        let stmt = transaction
             .prepare_cached(
                 "
                 DELETE FROM public.blocks
@@ -716,91 +567,55 @@ impl DbBlocks for DbBlocksPostgres {
                     paragraph_block_id
                 ",
             )
-            .await
-        {
-            Ok(stmt) => stmt,
-            Err(err) => {
-                tracing::error!("failed to prepare statement: {}", err);
-                return Err(DbError::Error);
-            }
-        };
+            .await?;
 
         tracing::debug!("delete block: executing query");
-        let block = match transaction.query(&stmt, &[&id]).await {
-            Ok(rows) if rows.len() == 0 => return Err(DbError::NotFound),
-            Ok(rows) if rows.len() >= 2 => return Err(DbError::TooMany),
-            Ok(rows) => rows[0].clone(),
-            Err(err) => {
-                tracing::error!("failed to delete record: {}", err);
-                return Err(DbError::Error);
-            }
+        let block = match transaction.query(&stmt, &[&id]).await? {
+            rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
+            rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
+            rows => rows[0].clone(),
         };
 
         if let Some(block_id) = block.get::<_, Option<Uuid>>("ingredient_collection_block_id") {
             tracing::debug!("delete ingredient collection block: preparing cached statement");
-            let stmt = match transaction
+            let stmt = transaction
                 .prepare_cached(
                     "
                     DELETE FROM public.ingredient_collection_blocks
                     WHERE id = $1
                     ",
                 )
-                .await
-            {
-                Ok(stmt) => stmt,
-                Err(err) => {
-                    tracing::error!("failed to prepare statement: {}", err);
-                    return Err(DbError::Error);
-                }
-            };
+                .await?;
 
             tracing::debug!("delete ingredient collection block: executing query");
-            match transaction.execute(&stmt, &[&block_id]).await {
-                Ok(count) if count == 0 => return Err(DbError::NotFound),
-                Ok(count) if count >= 2 => return Err(DbError::TooMany),
-                Ok(_) => (),
-                Err(err) => {
-                    tracing::error!("failed to delete record: {}", err);
-                    return Err(DbError::Error);
-                }
+            match transaction.execute(&stmt, &[&block_id]).await? {
+                count if count == 0 => return Err(DbError::NotFound.into()),
+                count if count >= 2 => return Err(DbError::TooMany.into()),
+                _ => (),
             };
         }
 
         if let Some(block_id) = block.get::<_, Option<Uuid>>("paragraph_block_id") {
             tracing::debug!("delete paragraph block: preparing cached statement");
-            let stmt = match transaction
+            let stmt = transaction
                 .prepare_cached(
                     "
                     DELETE FROM public.paragraph_blocks
                     WHERE id = $1
                     ",
                 )
-                .await
-            {
-                Ok(stmt) => stmt,
-                Err(err) => {
-                    tracing::error!("failed to prepare statement: {}", err);
-                    return Err(DbError::Error);
-                }
-            };
+                .await?;
 
             tracing::debug!("delete paragraph block: executing query");
-            match transaction.execute(&stmt, &[&block_id]).await {
-                Ok(count) if count == 0 => return Err(DbError::NotFound),
-                Ok(count) if count >= 2 => return Err(DbError::TooMany),
-                Ok(_) => (),
-                Err(err) => {
-                    tracing::error!("failed to delete record: {}", err);
-                    return Err(DbError::Error);
-                }
+            match transaction.execute(&stmt, &[&block_id]).await? {
+                count if count == 0 => return Err(DbError::NotFound.into()),
+                count if count >= 2 => return Err(DbError::TooMany.into()),
+                _ => (),
             };
         }
 
         tracing::debug!("committing database transaction");
-        if let Err(err) = transaction.commit().await {
-            tracing::error!("failed to commit transaction: {}", err);
-            return Err(DbError::Error);
-        }
+        transaction.commit().await?;
 
         Ok(())
     }

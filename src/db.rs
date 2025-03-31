@@ -1,17 +1,19 @@
+use std::error::Error;
+use std::fmt::{Debug, Display};
+
+use anyhow::Result;
 use deadpool::managed::{Object, Pool};
 use deadpool_postgres::Manager;
 
-use crate::types::error::Error;
-
 pub mod blocks;
-pub mod ingredient_collections;
-pub mod ingredients;
-pub mod products;
-pub mod shopping_list;
+// pub mod ingredient_collections;
+// pub mod ingredients;
+// pub mod products;
+// pub mod shopping_list;
 
 #[trait_variant::make(Send)]
 pub trait Db {
-    async fn blocks(&self) -> Result<impl blocks::DbBlocks, DbError>;
+    async fn blocks(&self) -> Result<impl blocks::DbBlocks>;
 }
 
 pub struct DbPostgres {
@@ -23,36 +25,28 @@ impl DbPostgres {
         Self { pool }
     }
 
-    async fn get_connection(&self) -> Result<Object<Manager>, DbError> {
+    async fn get_connection(&self) -> Result<Object<Manager>> {
         tracing::debug!("waiting for database connection");
-        match self.pool.get().await {
-            Ok(conn) => Ok(conn),
-            Err(err) => {
-                tracing::error!("failed to get a connection from the pool: {}", err);
-                return Err(DbError::Error);
-            }
-        }
+        Ok(self.pool.get().await?)
     }
 }
 
 impl Db for DbPostgres {
-    async fn blocks(&self) -> Result<impl blocks::DbBlocks, DbError> {
+    async fn blocks(&self) -> Result<impl blocks::DbBlocks> {
         Ok(blocks::DbBlocksPostgres::new(self.get_connection().await?))
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DbError {
-    Error,
     NotFound,
     TooMany,
     InvalidOperation,
 }
 
-impl std::fmt::Display for DbError {
+impl Display for DbError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            DbError::Error => write!(f, "database error"),
             DbError::NotFound => write!(f, "resource could not be found"),
             DbError::TooMany => write!(f, "query returned too many results"),
             DbError::InvalidOperation => write!(f, "operation may not be performed"),
@@ -60,20 +54,4 @@ impl std::fmt::Display for DbError {
     }
 }
 
-impl<T> From<DbError> for Error<DbError, T>
-where
-    T: std::error::Error,
-{
-    fn from(err: DbError) -> Self {
-        Error::new(err)
-    }
-}
-
-impl<T> From<T> for Error<DbError, T>
-where
-    T: std::error::Error,
-{
-    fn from(err: T) -> Error<DbError, T> {
-        Error::from_error(err)
-    }
-}
+impl Error for DbError {}

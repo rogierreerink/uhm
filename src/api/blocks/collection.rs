@@ -47,7 +47,7 @@ pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResp
     let mut db_blocks = match state.db().blocks().await {
         Ok(db) => db,
         Err(err) => {
-            tracing::error!("failed to connect to database: {}", err);
+            tracing::error!("failed to connect to database: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
@@ -55,7 +55,7 @@ pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResp
     let blocks = match db_blocks.get().await {
         Ok(blocks) => blocks,
         Err(err) => {
-            tracing::error!("failed to get blocks: {}", err);
+            tracing::error!("failed to get blocks: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
@@ -82,7 +82,7 @@ pub async fn post_collection(
     let mut db_blocks = match state.db().blocks().await {
         Ok(db) => db,
         Err(err) => {
-            tracing::error!("failed to connect to database: {}", err);
+            tracing::error!("failed to connect to database: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
@@ -90,7 +90,7 @@ pub async fn post_collection(
     let blocks = match db_blocks.create(&block.data).await {
         Ok(blocks) => blocks,
         Err(err) => {
-            tracing::error!("failed to create blocks: {}", err);
+            tracing::error!("failed to create blocks: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };

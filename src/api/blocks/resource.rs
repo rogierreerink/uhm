@@ -45,20 +45,20 @@ pub async fn get_resource(
     let mut db_blocks = match state.db().blocks().await {
         Ok(db) => db,
         Err(err) => {
-            tracing::error!("failed to connect to database: {}", err);
+            tracing::error!("failed to connect to database: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
     let block = match db_blocks.get_by_id(&id).await {
         Ok(block) => block,
-        Err(err) => match err {
-            DbError::NotFound => {
-                tracing::error!("block could not be found");
+        Err(err) => match err.downcast_ref::<DbError>() {
+            Some(DbError::NotFound) => {
+                tracing::error!("block could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to get block: {}", err);
+                tracing::error!("failed to get block: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         },
@@ -77,17 +77,23 @@ pub async fn patch_resource(
     let mut db_blocks = match state.db().blocks().await {
         Ok(db) => db,
         Err(err) => {
-            tracing::error!("failed to connect to database: {}", err);
+            tracing::error!("failed to connect to database: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
     let block = match db_blocks.update(&id, &block).await {
         Ok(blocks) => blocks,
-        Err(err) => {
-            tracing::error!("failed to update block: {}", err);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
+        Err(err) => match err.downcast_ref::<DbError>() {
+            Some(DbError::NotFound) => {
+                tracing::error!("block could not be found: {:?}", err);
+                return Err(StatusCode::NOT_FOUND);
+            }
+            _ => {
+                tracing::error!("failed to update block: {:?}", err);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        },
     };
 
     Ok((StatusCode::OK, Json(block)))
@@ -102,19 +108,19 @@ pub async fn delete_resource(
     let mut db_blocks = match state.db().blocks().await {
         Ok(db) => db,
         Err(err) => {
-            tracing::error!("failed to connect to database: {}", err);
+            tracing::error!("failed to connect to database: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
     if let Err(err) = db_blocks.delete(&id).await {
-        match err {
-            DbError::NotFound => {
-                tracing::error!("block could not be found");
+        match err.downcast_ref::<DbError>() {
+            Some(DbError::NotFound) => {
+                tracing::error!("block could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to delete block: {}", err);
+                tracing::error!("failed to delete block: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }
