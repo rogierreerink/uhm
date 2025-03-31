@@ -117,7 +117,7 @@ impl From<&Vec<Row>> for QueryResult<Product> {
     fn from(rows: &Vec<Row>) -> Self {
         rows.into_iter()
             .group_map(
-                |id| id.get::<_, Uuid>("id"),
+                |row| row.get::<_, Uuid>("id"),
                 |group| {
                     group
                         .fold(None, |product, row| {
@@ -216,10 +216,10 @@ impl DbProducts for DbProductsPostgres {
             .await?;
 
         tracing::debug!("executing query");
-        let result =
+        let products =
             QueryResult::from(&self.connection.query(&stmt, &[&params.name]).await?).inner();
 
-        Ok(result)
+        Ok(products)
     }
 
     async fn get_by_id(&mut self, id: &Uuid) -> Result<Product> {
@@ -390,7 +390,7 @@ impl DbProducts for DbProductsPostgres {
             .prepare_cached(
                 "
                 DELETE FROM public.products
-                WHERE products.id = $1
+                WHERE id = $1
                 ",
             )
             .await?;

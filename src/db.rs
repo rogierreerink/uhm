@@ -6,14 +6,17 @@ use deadpool::managed::{Object, Pool};
 use deadpool_postgres::Manager;
 
 pub mod blocks;
+pub mod ingredient_collections;
 pub mod products;
-// pub mod ingredient_collections;
 // pub mod ingredients;
 // pub mod shopping_list;
 
 #[trait_variant::make(Send)]
 pub trait Db {
     async fn blocks(&self) -> Result<impl blocks::DbBlocks>;
+    async fn ingredient_collections(
+        &self,
+    ) -> Result<impl ingredient_collections::DbIngredientCollections>;
     async fn products(&self) -> Result<impl products::DbProducts>;
 }
 
@@ -49,6 +52,15 @@ impl DbPostgres {
 impl Db for DbPostgres {
     async fn blocks(&self) -> Result<impl blocks::DbBlocks> {
         Ok(blocks::DbBlocksPostgres::new(self.get_connection().await?))
+    }
+    async fn ingredient_collections(
+        &self,
+    ) -> Result<impl ingredient_collections::DbIngredientCollections> {
+        Ok(
+            ingredient_collections::DbIngredientCollectionsPostgres::new(
+                self.get_connection().await?,
+            ),
+        )
     }
     async fn products(&self) -> Result<impl products::DbProducts> {
         Ok(products::DbProductsPostgres::new(

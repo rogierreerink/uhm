@@ -247,7 +247,7 @@ impl DbBlocks for DbBlocksPostgres {
             .await?;
 
         tracing::debug!("executing query");
-        let result = self
+        let blocks = self
             .connection
             .query(&stmt, &[])
             .await?
@@ -255,7 +255,7 @@ impl DbBlocks for DbBlocksPostgres {
             .map(|row| (&row).into())
             .collect();
 
-        Ok(result)
+        Ok(blocks)
     }
 
     async fn get_by_id(&mut self, id: &Uuid) -> Result<Block> {
@@ -285,13 +285,13 @@ impl DbBlocks for DbBlocksPostgres {
             .await?;
 
         tracing::debug!("executing query");
-        let result = match self.connection.query(&stmt, &[&id]).await? {
+        let block = match self.connection.query(&stmt, &[&id]).await? {
             rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
             rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
             rows => (&rows[0]).into(),
         };
 
-        Ok(result)
+        Ok(block)
     }
 
     async fn create(&mut self, blocks: &Vec<BlockNew>) -> Result<Vec<Block>> {
@@ -561,7 +561,7 @@ impl DbBlocks for DbBlocksPostgres {
             .prepare_cached(
                 "
                 DELETE FROM public.blocks
-                WHERE blocks.id = $1
+                WHERE id = $1
                 RETURNING
                     ingredient_collection_block_id,
                     paragraph_block_id
