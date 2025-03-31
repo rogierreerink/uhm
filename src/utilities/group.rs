@@ -90,12 +90,12 @@ where
 {
     type Item = I::Item;
     fn next(&mut self) -> Option<Self::Item> {
-        /* A new group is only created when a next value is known to be
-         * available, since either the GroupMap or the last poll of the
-         * previous Group peeks the iterator for the next value and its
-         * key.
-         */
-        if self.is_polled == false {
+        if !self.is_polled {
+            /* A new group is only created when a next value is known to be
+             * available since either the GroupMap or the last poll of the
+             * previous Group peeks the iterator for the next value and its
+             * key.
+             */
             self.is_polled = true;
             self.iter.next()
         } else {
