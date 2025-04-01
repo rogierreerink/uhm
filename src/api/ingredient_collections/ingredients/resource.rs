@@ -1,4 +1,4 @@
-use crate::db::ingredient_collections::{DbIngredientCollections, IngredientCollectionUpdate};
+use crate::db::ingredients::{DbIngredients, IngredientUpdate};
 use crate::db::Db;
 use crate::global::AppState;
 use crate::{api::handle_options, db::DbError};
@@ -15,8 +15,6 @@ use tower::ServiceBuilder;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tracing::instrument;
 use uuid::Uuid;
-
-use super::ingredients;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
@@ -36,19 +34,15 @@ pub fn create_router(state: Arc<AppState>) -> Router {
                 )),
         )
         .with_state(state.clone())
-        .nest(
-            "/:id/ingredients",
-            ingredients::create_router(state.clone()),
-        )
 }
 
 #[axum::debug_handler]
 #[instrument(skip(state))]
 pub async fn get_resource(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
+    Path((collection_id, id)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
-    let mut db_ingredient_collections = match state.db().ingredient_collections().await {
+    let mut db_ingredients = match state.db().ingredients().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -56,31 +50,31 @@ pub async fn get_resource(
         }
     };
 
-    let collection = match db_ingredient_collections.get_by_id(&id).await {
-        Ok(collection) => collection,
+    let ingredient = match db_ingredients.get_by_id(&collection_id, &id).await {
+        Ok(ingredient) => ingredient,
         Err(err) => match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
-                tracing::error!("ingredient collection could not be found: {:?}", err);
+                tracing::error!("ingredient could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to get ingredient collection: {:?}", err);
+                tracing::error!("failed to get ingredient: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         },
     };
 
-    Ok((StatusCode::OK, Json(collection)))
+    Ok((StatusCode::OK, Json(ingredient)))
 }
 
 #[axum::debug_handler]
-#[instrument(skip(state, ingredient_collection))]
+#[instrument(skip(state, ingredient))]
 pub async fn patch_resource(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
-    Json(ingredient_collection): Json<IngredientCollectionUpdate>,
+    Path((collection_id, id)): Path<(Uuid, Uuid)>,
+    Json(ingredient): Json<IngredientUpdate>,
 ) -> impl IntoResponse {
-    let mut db_ingredient_collections = match state.db().ingredient_collections().await {
+    let mut db_ingredients = match state.db().ingredients().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -88,33 +82,33 @@ pub async fn patch_resource(
         }
     };
 
-    let collection = match db_ingredient_collections
-        .update(&id, &ingredient_collection)
+    let ingredient = match db_ingredients
+        .update(&collection_id, &id, &ingredient)
         .await
     {
-        Ok(collection) => collection,
+        Ok(ingredient) => ingredient,
         Err(err) => match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
-                tracing::error!("ingredient collection could not be found: {:?}", err);
+                tracing::error!("ingredient could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to update ingredient collection: {:?}", err);
+                tracing::error!("failed to update ingredient: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         },
     };
 
-    Ok((StatusCode::OK, Json(collection)))
+    Ok((StatusCode::OK, Json(ingredient)))
 }
 
 #[axum::debug_handler]
 #[instrument(skip(state))]
 pub async fn delete_resource(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
+    Path((collection_id, id)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
-    let mut db_ingredient_collections = match state.db().ingredient_collections().await {
+    let mut db_ingredients = match state.db().ingredients().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -122,14 +116,14 @@ pub async fn delete_resource(
         }
     };
 
-    if let Err(err) = db_ingredient_collections.delete(&id).await {
+    if let Err(err) = db_ingredients.delete(&collection_id, &id).await {
         match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
-                tracing::error!("ingredient collection could not be found: {:?}", err);
+                tracing::error!("ingredient could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to delete ingredient collection: {:?}", err);
+                tracing::error!("failed to delete ingredient: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }

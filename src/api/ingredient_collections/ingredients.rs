@@ -4,7 +4,6 @@ use axum::Router;
 use std::sync::Arc;
 
 mod collection;
-mod ingredients;
 mod resource;
 
 pub fn create_router(state: Arc<AppState>) -> Router {

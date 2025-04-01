@@ -88,7 +88,7 @@ impl From<&Vec<&Row>> for Pack<Vec<ShoppingListItemLinkSummary>> {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct Product {
     pub id: Uuid,
     pub ts_created: DateTime<Utc>,
@@ -119,7 +119,7 @@ impl From<&Vec<Row>> for Pack<Vec<Product>> {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct ProductData {
     pub name: String,
     pub shopping_list_item_links: Vec<ShoppingListItemLink>,
@@ -136,7 +136,7 @@ impl From<&Vec<&Row>> for Pack<Option<ProductData>> {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct ShoppingListItemLink {
     id: Uuid,
 }
@@ -237,12 +237,12 @@ impl DbProducts for DbProductsPostgres {
 
         tracing::debug!("executing query");
         let products: Vec<Product> =
-            Pack::from(&self.connection.query(&stmt, &[&id]).await?).unpack();
+            Pack::from(&self.connection.query(&stmt, &[id]).await?).unpack();
 
         match products {
             products if products.len() == 0 => Err(DbError::NotFound.into()),
             products if products.len() >= 2 => Err(DbError::TooMany.into()),
-            products => Ok(products[0].clone()),
+            mut products => Ok(products.pop().unwrap()),
         }
     }
 
@@ -251,7 +251,6 @@ impl DbProducts for DbProductsPostgres {
         let transaction = self.connection.transaction().await?;
 
         let mut inserted = Vec::new();
-
         for product in products {
             let product_id = Uuid::new_v4();
 
@@ -323,10 +322,10 @@ impl DbProducts for DbProductsPostgres {
 
         tracing::debug!("get current: executing query");
         let current =
-            match Pack::<Vec<Product>>::from(&transaction.query(&stmt, &[&id]).await?).unpack() {
+            match Pack::<Vec<Product>>::from(&transaction.query(&stmt, &[id]).await?).unpack() {
                 products if products.len() == 0 => return Err(DbError::NotFound.into()),
                 products if products.len() >= 2 => return Err(DbError::TooMany.into()),
-                products => products[0].clone(),
+                mut products => products.pop().unwrap(),
             };
 
         tracing::debug!("update: executing query");
@@ -346,7 +345,7 @@ impl DbProducts for DbProductsPostgres {
         let updated_row = transaction
             .query_one(
                 &stmt,
-                &[&id, product.name.as_ref().unwrap_or(&current.data.name)],
+                &[id, product.name.as_ref().unwrap_or(&current.data.name)],
             )
             .await?;
 
@@ -379,7 +378,7 @@ impl DbProducts for DbProductsPostgres {
             .await?;
 
         tracing::debug!("executing query");
-        match transaction.execute(&stmt, &[&id]).await? {
+        match transaction.execute(&stmt, &[id]).await? {
             rows if rows == 0 => return Err(DbError::NotFound.into()),
             rows if rows >= 2 => return Err(DbError::TooMany.into()),
             _ => (),

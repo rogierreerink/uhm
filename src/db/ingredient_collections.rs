@@ -54,7 +54,7 @@ impl From<&Row> for IngredientCollectionSummaryData {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct IngredientCollection {
     pub id: Uuid,
     pub ts_created: DateTime<Utc>,
@@ -83,7 +83,7 @@ impl From<&Vec<Row>> for Pack<Vec<IngredientCollection>> {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct IngredientCollectionData {
     ingredients: Vec<Ingredient>,
 }
@@ -96,7 +96,7 @@ impl From<&Vec<&Row>> for IngredientCollectionData {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct Ingredient {
     id: Uuid,
     data: IngredientData,
@@ -116,7 +116,7 @@ impl From<&Vec<&Row>> for Pack<Vec<Ingredient>> {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct IngredientData {
     product: Product,
 }
@@ -129,7 +129,7 @@ impl From<&Row> for IngredientData {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct Product {
     id: Uuid,
     data: ProductData,
@@ -144,7 +144,7 @@ impl From<&Row> for Product {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct ProductData {
     name: String,
 }
@@ -230,13 +230,13 @@ impl DbIngredientCollections for DbIngredientCollectionsPostgres {
 
         tracing::debug!("executing query");
         let collections =
-            Pack::<Vec<IngredientCollection>>::from(&self.connection.query(&stmt, &[&id]).await?)
+            Pack::<Vec<IngredientCollection>>::from(&self.connection.query(&stmt, &[id]).await?)
                 .unpack();
 
         match collections {
             collections if collections.len() == 0 => Err(DbError::NotFound.into()),
             collections if collections.len() >= 2 => Err(DbError::TooMany.into()),
-            collections => Ok(collections[0].clone()),
+            mut collections => Ok(collections.pop().unwrap()),
         }
     }
 
@@ -248,7 +248,6 @@ impl DbIngredientCollections for DbIngredientCollectionsPostgres {
         let transaction = self.connection.transaction().await?;
 
         let mut inserted = Vec::new();
-
         for _ in ingredient_collections {
             let ingredient_collection_id = Uuid::new_v4();
 
@@ -302,10 +301,10 @@ impl DbIngredientCollections for DbIngredientCollectionsPostgres {
             .await?;
 
         tracing::debug!("get current: executing query");
-        let current = match transaction.query(&stmt, &[&id]).await? {
+        let current = match transaction.query(&stmt, &[id]).await? {
             rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
             rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
-            rows => rows[0].clone(),
+            mut rows => rows.pop().unwrap(),
         };
 
         tracing::debug!("update: executing query");
@@ -321,13 +320,13 @@ impl DbIngredientCollections for DbIngredientCollectionsPostgres {
             .await?;
 
         tracing::debug!("update: executing query");
-        let updated = transaction.query_one(&stmt, &[&id]).await?;
+        let updated = transaction.query_one(&stmt, &[id]).await?;
 
         tracing::debug!("committing database transaction");
         transaction.commit().await?;
 
         Ok(IngredientCollectionSummary {
-            id: current.get("id"),
+            id: *id,
             ts_created: current.get("ts_created"),
             ts_updated: updated.get("ts_updated"),
             data: IngredientCollectionSummaryData {},
@@ -349,7 +348,7 @@ impl DbIngredientCollections for DbIngredientCollectionsPostgres {
             .await?;
 
         tracing::debug!("executing query");
-        match transaction.execute(&stmt, &[&id]).await? {
+        match transaction.execute(&stmt, &[id]).await? {
             rows if rows == 0 => return Err(DbError::NotFound.into()),
             rows if rows >= 2 => return Err(DbError::TooMany.into()),
             _ => (),

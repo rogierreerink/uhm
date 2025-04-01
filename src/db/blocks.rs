@@ -96,7 +96,7 @@ impl From<&Row> for ParagraphSummaryData {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct Block {
     pub id: Uuid,
     pub ts_created: DateTime<Utc>,
@@ -115,7 +115,7 @@ impl From<&Row> for Block {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct BlockData {
     pub kind: BlockKind,
 }
@@ -126,7 +126,7 @@ impl From<&Row> for BlockData {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BlockKind {
     IngredientCollection {
@@ -153,7 +153,7 @@ impl From<&Row> for BlockKind {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct IngredientCollectionData {}
 
 impl From<&Row> for IngredientCollectionData {
@@ -162,7 +162,7 @@ impl From<&Row> for IngredientCollectionData {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct ParagraphData {
     pub text: String,
 }
@@ -285,7 +285,7 @@ impl DbBlocks for DbBlocksPostgres {
             .await?;
 
         tracing::debug!("executing query");
-        let block = match self.connection.query(&stmt, &[&id]).await? {
+        let block = match self.connection.query(&stmt, &[id]).await? {
             rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
             rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
             rows => (&rows[0]).into(),
@@ -299,7 +299,6 @@ impl DbBlocks for DbBlocksPostgres {
         let transaction = self.connection.transaction().await?;
 
         let mut inserted = Vec::new();
-
         for block in blocks {
             let block_id = Uuid::new_v4();
             let block_kind_id = Uuid::new_v4();
@@ -452,10 +451,10 @@ impl DbBlocks for DbBlocksPostgres {
             .await?;
 
         tracing::debug!("get current block: executing query");
-        let current = match transaction.query(&stmt, &[&id]).await? {
+        let current = match transaction.query(&stmt, &[id]).await? {
             rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
             rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
-            rows => rows[0].clone(),
+            mut rows => rows.pop().unwrap(),
         };
 
         let updated_block_kind = match &block.kind {
@@ -537,13 +536,13 @@ impl DbBlocks for DbBlocksPostgres {
             .await?;
 
         tracing::debug!("update block: executing query");
-        transaction.execute(&stmt, &[&id]).await?;
+        transaction.execute(&stmt, &[id]).await?;
 
         tracing::debug!("committing database transaction");
         transaction.commit().await?;
 
         Ok(Block {
-            id: current.get("id"),
+            id: *id,
             ts_created: current.get("ts_created"),
             ts_updated: current.get("ts_updated"),
             data: BlockData {
@@ -570,10 +569,10 @@ impl DbBlocks for DbBlocksPostgres {
             .await?;
 
         tracing::debug!("delete block: executing query");
-        let block = match transaction.query(&stmt, &[&id]).await? {
+        let block = match transaction.query(&stmt, &[id]).await? {
             rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
             rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
-            rows => rows[0].clone(),
+            mut rows => rows.pop().unwrap(),
         };
 
         if let Some(block_id) = block.get::<_, Option<Uuid>>("ingredient_collection_block_id") {
