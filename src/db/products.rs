@@ -342,12 +342,17 @@ impl DbProducts for DbProductsPostgres {
             .await?;
 
         tracing::debug!("update: executing query");
-        let updated_row = transaction
-            .query_one(
+        let updated_row = match transaction
+            .query(
                 &stmt,
                 &[id, product.name.as_ref().unwrap_or(&current.data.name)],
             )
-            .await?;
+            .await?
+        {
+            rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
+            rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
+            mut rows => rows.pop().unwrap(),
+        };
 
         tracing::debug!("committing database transaction");
         transaction.commit().await?;

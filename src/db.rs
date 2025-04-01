@@ -8,8 +8,8 @@ use deadpool_postgres::Manager;
 pub mod blocks;
 pub mod ingredient_collections;
 pub mod ingredients;
+pub mod list_items;
 pub mod products;
-// pub mod shopping_list;
 
 #[trait_variant::make(Send)]
 pub trait Db {
@@ -18,6 +18,7 @@ pub trait Db {
         &self,
     ) -> Result<impl ingredient_collections::DbIngredientCollections>;
     async fn ingredients(&self) -> Result<impl ingredients::DbIngredients>;
+    async fn list_items(&self) -> Result<impl list_items::DbListItems>;
     async fn products(&self) -> Result<impl products::DbProducts>;
 }
 
@@ -53,6 +54,12 @@ impl Db for DbPostgres {
 
     async fn ingredients(&self) -> Result<impl ingredients::DbIngredients> {
         Ok(ingredients::DbIngredientsPostgres::new(
+            self.get_connection().await?,
+        ))
+    }
+
+    async fn list_items(&self) -> Result<impl list_items::DbListItems> {
+        Ok(list_items::DbListItemsPostgres::new(
             self.get_connection().await?,
         ))
     }

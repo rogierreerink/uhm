@@ -320,7 +320,11 @@ impl DbIngredientCollections for DbIngredientCollectionsPostgres {
             .await?;
 
         tracing::debug!("update: executing query");
-        let updated = transaction.query_one(&stmt, &[id]).await?;
+        let updated = match transaction.query(&stmt, &[id]).await? {
+            rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
+            rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
+            mut rows => rows.pop().unwrap(),
+        };
 
         tracing::debug!("committing database transaction");
         transaction.commit().await?;

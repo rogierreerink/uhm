@@ -301,7 +301,7 @@ impl DbBlocks for DbBlocksPostgres {
         let mut inserted = Vec::new();
         for block in blocks {
             let block_id = Uuid::new_v4();
-            let block_kind_id = Uuid::new_v4();
+            let kind_id = Uuid::new_v4();
 
             inserted.push(match &block.kind {
                 BlockNewKind::IngredientCollection { id } => {
@@ -323,7 +323,7 @@ impl DbBlocks for DbBlocksPostgres {
                         .await?;
 
                     tracing::debug!("create ingredient collection block: executing query");
-                    transaction.execute(&stmt, &[&block_kind_id, &id]).await?;
+                    transaction.execute(&stmt, &[&kind_id, id]).await?;
 
                     tracing::debug!("create block: preparing cached statement");
                     let stmt = transaction
@@ -342,9 +342,7 @@ impl DbBlocks for DbBlocksPostgres {
                         .await?;
 
                     tracing::debug!("create block: executing query");
-                    let row = transaction
-                        .query_one(&stmt, &[&block_id, &block_kind_id])
-                        .await?;
+                    let row = transaction.query_one(&stmt, &[&block_id, &kind_id]).await?;
 
                     Block {
                         id: block_id,
@@ -375,9 +373,7 @@ impl DbBlocks for DbBlocksPostgres {
                         .await?;
 
                     tracing::debug!("create paragraph block: executing query");
-                    transaction
-                        .execute(&stmt, &[&block_kind_id, &data.text])
-                        .await?;
+                    transaction.execute(&stmt, &[&kind_id, &data.text]).await?;
 
                     tracing::debug!("create block: preparing cached statement");
                     let stmt = transaction
@@ -396,9 +392,7 @@ impl DbBlocks for DbBlocksPostgres {
                         .await?;
 
                     tracing::debug!("create block: executing query");
-                    let row = transaction
-                        .query_one(&stmt, &[&block_id, &block_kind_id])
-                        .await?;
+                    let row = transaction.query_one(&stmt, &[&block_id, &kind_id]).await?;
 
                     Block {
                         id: block_id,
@@ -480,9 +474,14 @@ impl DbBlocks for DbBlocksPostgres {
                     id.unwrap_or(current.get("ingredient_collection_id"));
 
                 tracing::debug!("update ingredient collection block: executing query");
-                transaction
+                match transaction
                     .execute(&stmt, &[&block_id, &ingredient_collection_id])
-                    .await?;
+                    .await?
+                {
+                    count if count == 0 => return Err(DbError::NotFound.into()),
+                    count if count >= 2 => return Err(DbError::TooMany.into()),
+                    _ => (),
+                }
 
                 BlockKind::IngredientCollection {
                     id: ingredient_collection_id,
@@ -514,14 +513,18 @@ impl DbBlocks for DbBlocksPostgres {
                     .unwrap_or(current.get("paragraph_block_text"));
 
                 tracing::debug!("update paragraph block: executing query");
-                transaction.execute(&stmt, &[&block_id, &text]).await?;
+                match transaction.execute(&stmt, &[&block_id, &text]).await? {
+                    count if count == 0 => return Err(DbError::NotFound.into()),
+                    count if count >= 2 => return Err(DbError::TooMany.into()),
+                    _ => (),
+                }
 
                 BlockKind::Paragraph {
                     data: ParagraphData { text },
                 }
             }
 
-            None => Into::<BlockKind>::into(&current),
+            None => BlockKind::from(&current),
         };
 
         tracing::debug!("update block: executing query");
@@ -531,12 +534,17 @@ impl DbBlocks for DbBlocksPostgres {
                 UPDATE public.blocks
                 SET ts_updated = CURRENT_TIMESTAMP
                 WHERE id = $1
+                RETURNING ts_updated
                 ",
             )
             .await?;
 
         tracing::debug!("update block: executing query");
-        transaction.execute(&stmt, &[id]).await?;
+        let updated = match transaction.query(&stmt, &[id]).await? {
+            rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
+            rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
+            mut rows => rows.pop().unwrap(),
+        };
 
         tracing::debug!("committing database transaction");
         transaction.commit().await?;
@@ -544,7 +552,7 @@ impl DbBlocks for DbBlocksPostgres {
         Ok(Block {
             id: *id,
             ts_created: current.get("ts_created"),
-            ts_updated: current.get("ts_updated"),
+            ts_updated: updated.get("ts_updated"),
             data: BlockData {
                 kind: updated_block_kind,
             },
