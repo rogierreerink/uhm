@@ -1,5 +1,7 @@
 services:
   database-api:
+    profiles:
+      - all
     build:
       context: .
       target: debug

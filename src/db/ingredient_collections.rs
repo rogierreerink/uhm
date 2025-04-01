@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use tokio_postgres::Row;
 use uuid::Uuid;
 
-use crate::utilities::group::GroupIterExt;
+use crate::utilities::{group::GroupIterExt, pack::Pack};
 
-use super::{DbError, QueryResult};
+use super::DbError;
 
 #[trait_variant::make(Send)]
 pub trait DbIngredientCollections {
@@ -62,35 +62,21 @@ pub struct IngredientCollection {
     pub data: IngredientCollectionData,
 }
 
-impl From<&Row> for IngredientCollection {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("id"),
-            ts_created: row.get("ts_created"),
-            ts_updated: row.get("ts_updated"),
-            data: row.into(),
-        }
-    }
-}
-
-impl From<&Vec<Row>> for QueryResult<IngredientCollection> {
+impl From<&Vec<Row>> for Pack<Vec<IngredientCollection>> {
     fn from(rows: &Vec<Row>) -> Self {
         rows.into_iter()
             .group_map(
                 |row| row.get::<_, Uuid>("id"),
-                |group| {
-                    group
-                        .fold(None, |collection, row| {
-                            let mut collection: IngredientCollection =
-                                collection.unwrap_or_else(|| row.into());
+                |mut group| {
+                    let row = *group.peek().unwrap();
+                    let group = group.collect::<Vec<&Row>>();
 
-                            if let Some(_) = row.get::<_, Option<Uuid>>("ingredient_id") {
-                                collection.data.ingredients.push(row.into());
-                            }
-
-                            Some(collection)
-                        })
-                        .unwrap()
+                    IngredientCollection {
+                        id: row.get("id"),
+                        ts_created: row.get("ts_created"),
+                        ts_updated: row.get("ts_updated"),
+                        data: IngredientCollectionData::from(&group),
+                    }
                 },
             )
             .collect()
@@ -102,10 +88,10 @@ pub struct IngredientCollectionData {
     ingredients: Vec<Ingredient>,
 }
 
-impl From<&Row> for IngredientCollectionData {
-    fn from(_: &Row) -> Self {
-        Self {
-            ingredients: vec![],
+impl From<&Vec<&Row>> for IngredientCollectionData {
+    fn from(rows: &Vec<&Row>) -> Self {
+        IngredientCollectionData {
+            ingredients: Pack::from(rows).unpack(),
         }
     }
 }
@@ -116,12 +102,17 @@ pub struct Ingredient {
     data: IngredientData,
 }
 
-impl From<&Row> for Ingredient {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("ingredient_id"),
-            data: row.into(),
-        }
+impl From<&Vec<&Row>> for Pack<Vec<Ingredient>> {
+    fn from(rows: &Vec<&Row>) -> Self {
+        rows.into_iter()
+            .filter_map(|row| {
+                row.get::<_, Option<Uuid>>("ingredient_id")
+                    .map(|id| Ingredient {
+                        id,
+                        data: IngredientData::from(*row),
+                    })
+            })
+            .collect()
     }
 }
 
@@ -239,8 +230,8 @@ impl DbIngredientCollections for DbIngredientCollectionsPostgres {
 
         tracing::debug!("executing query");
         let collections =
-            QueryResult::<IngredientCollection>::from(&self.connection.query(&stmt, &[&id]).await?)
-                .inner();
+            Pack::<Vec<IngredientCollection>>::from(&self.connection.query(&stmt, &[&id]).await?)
+                .unpack();
 
         match collections {
             collections if collections.len() == 0 => Err(DbError::NotFound.into()),

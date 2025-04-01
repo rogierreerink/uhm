@@ -20,20 +20,6 @@ pub trait Db {
     async fn products(&self) -> Result<impl products::DbProducts>;
 }
 
-pub struct QueryResult<T>(Vec<T>);
-
-impl<T> QueryResult<T> {
-    fn inner(self) -> Vec<T> {
-        self.0
-    }
-}
-
-impl<T> FromIterator<T> for QueryResult<T> {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        Self(iter.into_iter().collect())
-    }
-}
-
 pub struct DbPostgres {
     pool: Pool<Manager>,
 }

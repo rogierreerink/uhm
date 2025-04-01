@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use tokio_postgres::Row;
 use uuid::Uuid;
 
-use crate::utilities::group::GroupIterExt;
+use crate::utilities::{group::GroupIterExt, pack::Pack};
 
-use super::{DbError, QueryResult};
+use super::DbError;
 
 #[trait_variant::make(Send)]
 pub trait DbProducts {
@@ -32,34 +32,23 @@ pub struct ProductSummary {
     pub data: ProductSummaryData,
 }
 
-impl From<&Row> for ProductSummary {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("id"),
-            ts_created: row.get("ts_created"),
-            ts_updated: row.get("ts_updated"),
-            data: row.into(),
-        }
-    }
-}
-
-impl From<&Vec<Row>> for QueryResult<ProductSummary> {
+impl From<&Vec<Row>> for Pack<Vec<ProductSummary>> {
     fn from(rows: &Vec<Row>) -> Self {
         rows.into_iter()
             .group_map(
-                |id| id.get::<_, Uuid>("id"),
-                |group| {
-                    group
-                        .fold(None, |product, row| {
-                            let mut product: ProductSummary = product.unwrap_or_else(|| row.into());
+                |row| row.get::<_, Uuid>("id"),
+                |mut group| {
+                    let row = *group.peek().unwrap();
+                    let group = group.collect::<Vec<&Row>>();
 
-                            if let Some(_) = row.get::<_, Option<Uuid>>("shopping_list_item_id") {
-                                product.data.shopping_list_item_links.push(row.into());
-                            }
-
-                            Some(product)
-                        })
-                        .unwrap()
+                    ProductSummary {
+                        id: row.get("id"),
+                        ts_created: row.get("ts_created"),
+                        ts_updated: row.get("ts_updated"),
+                        data: Pack::<Option<ProductSummaryData>>::from(&group)
+                            .unpack()
+                            .expect("cannot fail as `group` will never be empty"),
+                    }
                 },
             )
             .collect()
@@ -72,12 +61,14 @@ pub struct ProductSummaryData {
     pub shopping_list_item_links: Vec<ShoppingListItemLinkSummary>,
 }
 
-impl From<&Row> for ProductSummaryData {
-    fn from(row: &Row) -> Self {
-        Self {
-            name: row.get("name"),
-            shopping_list_item_links: vec![],
-        }
+impl From<&Vec<&Row>> for Pack<Option<ProductSummaryData>> {
+    fn from(rows: &Vec<&Row>) -> Self {
+        rows.get(0)
+            .map(|row| ProductSummaryData {
+                name: row.get("name"),
+                shopping_list_item_links: Pack::from(rows).unpack(),
+            })
+            .into()
     }
 }
 
@@ -86,11 +77,14 @@ pub struct ShoppingListItemLinkSummary {
     id: Uuid,
 }
 
-impl From<&Row> for ShoppingListItemLinkSummary {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("shopping_list_item_id"),
-        }
+impl From<&Vec<&Row>> for Pack<Vec<ShoppingListItemLinkSummary>> {
+    fn from(rows: &Vec<&Row>) -> Self {
+        rows.into_iter()
+            .filter_map(|row| {
+                row.get::<_, Option<Uuid>>("shopping_list_item_id")
+                    .map(|id| ShoppingListItemLinkSummary { id })
+            })
+            .collect()
     }
 }
 
@@ -102,34 +96,23 @@ pub struct Product {
     pub data: ProductData,
 }
 
-impl From<&Row> for Product {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("id"),
-            ts_created: row.get("ts_created"),
-            ts_updated: row.get("ts_updated"),
-            data: row.into(),
-        }
-    }
-}
-
-impl From<&Vec<Row>> for QueryResult<Product> {
+impl From<&Vec<Row>> for Pack<Vec<Product>> {
     fn from(rows: &Vec<Row>) -> Self {
         rows.into_iter()
             .group_map(
                 |row| row.get::<_, Uuid>("id"),
-                |group| {
-                    group
-                        .fold(None, |product, row| {
-                            let mut product: Product = product.unwrap_or_else(|| row.into());
+                |mut group| {
+                    let row = *group.peek().unwrap();
+                    let group = group.collect::<Vec<&Row>>();
 
-                            if let Some(_) = row.get::<_, Option<Uuid>>("shopping_list_item_id") {
-                                product.data.shopping_list_item_links.push(row.into());
-                            }
-
-                            Some(product)
-                        })
-                        .unwrap()
+                    Product {
+                        id: row.get("id"),
+                        ts_created: row.get("ts_created"),
+                        ts_updated: row.get("ts_updated"),
+                        data: Pack::<Option<ProductData>>::from(&group)
+                            .unpack()
+                            .expect("cannot fail as `group` will never be empty"),
+                    }
                 },
             )
             .collect()
@@ -142,12 +125,14 @@ pub struct ProductData {
     pub shopping_list_item_links: Vec<ShoppingListItemLink>,
 }
 
-impl From<&Row> for ProductData {
-    fn from(row: &Row) -> Self {
-        Self {
-            name: row.get("name"),
-            shopping_list_item_links: vec![],
-        }
+impl From<&Vec<&Row>> for Pack<Option<ProductData>> {
+    fn from(rows: &Vec<&Row>) -> Self {
+        rows.get(0)
+            .map(|row| ProductData {
+                name: row.get("name"),
+                shopping_list_item_links: Pack::from(rows).unpack(),
+            })
+            .into()
     }
 }
 
@@ -156,11 +141,14 @@ pub struct ShoppingListItemLink {
     id: Uuid,
 }
 
-impl From<&Row> for ShoppingListItemLink {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("shopping_list_item_id"),
-        }
+impl From<&Vec<&Row>> for Pack<Vec<ShoppingListItemLink>> {
+    fn from(rows: &Vec<&Row>) -> Self {
+        rows.into_iter()
+            .filter_map(|row| {
+                row.get::<_, Option<Uuid>>("shopping_list_item_id")
+                    .map(|id| ShoppingListItemLink { id })
+            })
+            .collect()
     }
 }
 
@@ -216,8 +204,7 @@ impl DbProducts for DbProductsPostgres {
             .await?;
 
         tracing::debug!("executing query");
-        let products =
-            QueryResult::from(&self.connection.query(&stmt, &[&params.name]).await?).inner();
+        let products = Pack::from(&self.connection.query(&stmt, &[&params.name]).await?).unpack();
 
         Ok(products)
     }
@@ -243,16 +230,14 @@ impl DbProducts for DbProductsPostgres {
 
                 WHERE products.id = $1
                 ORDER BY
-                    products.name,
-                    products.id,
                     shopping_list.id
                 ",
             )
             .await?;
 
         tracing::debug!("executing query");
-        let products =
-            QueryResult::<Product>::from(&self.connection.query(&stmt, &[&id]).await?).inner();
+        let products: Vec<Product> =
+            Pack::from(&self.connection.query(&stmt, &[&id]).await?).unpack();
 
         match products {
             products if products.len() == 0 => Err(DbError::NotFound.into()),
@@ -331,8 +316,6 @@ impl DbProducts for DbProductsPostgres {
 
                 WHERE products.id = $1
                 ORDER BY
-                    products.name,
-                    products.id,
                     shopping_list.id
                 ",
             )
@@ -340,7 +323,7 @@ impl DbProducts for DbProductsPostgres {
 
         tracing::debug!("get current: executing query");
         let current =
-            match QueryResult::<Product>::from(&transaction.query(&stmt, &[&id]).await?).inner() {
+            match Pack::<Vec<Product>>::from(&transaction.query(&stmt, &[&id]).await?).unpack() {
                 products if products.len() == 0 => return Err(DbError::NotFound.into()),
                 products if products.len() >= 2 => return Err(DbError::TooMany.into()),
                 products => products[0].clone(),

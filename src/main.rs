@@ -8,19 +8,22 @@ use db::DbPostgres;
 use global::{AppDb, AppState};
 use tower::ServiceBuilder;
 use tower_http::set_header::SetResponseHeaderLayer;
+use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{filter::EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod api;
 mod db;
 mod global;
-mod types;
 mod utilities;
 
 #[tokio::main]
 async fn main() {
+    let tracing_filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env_lossy();
     tracing_subscriber::registry()
+        .with(tracing_filter)
         .with(fmt::layer())
-        .with(EnvFilter::from_default_env())
         .init();
     tracing::info!("starting application");
 

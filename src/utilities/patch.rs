@@ -67,6 +67,11 @@ mod tests {
         caz: u32,
     }
 
+    #[derive(Serialize)]
+    struct Boo {
+        bar: Patch<bool>,
+    }
+
     #[test]
     fn deserialize_value() {
         let foo: Foo = serde_json::from_value(json!({
@@ -116,11 +121,6 @@ mod tests {
         assert_eq!(patch.as_ref(), Some(Some(&true)));
     }
 
-    #[derive(Serialize)]
-    struct Boo {
-        bar: Patch<bool>,
-    }
-
     #[test]
     fn serialize_value() {
         let boo = Boo {
@@ -137,55 +137,3 @@ mod tests {
         assert_eq!("{\"bar\":null}", serde_json::to_string(&boo).unwrap());
     }
 }
-
-// impl<T> Into<Option<T>> for Patch<T> {
-//     fn into(self) -> Option<T> {
-//         match self {
-//             Patch::Value(v) => Some(v),
-//             Patch::Null => None,
-//             Patch::Undefined => None,
-//         }
-//     }
-// }
-//
-// impl<T> From<Option<T>> for Patch<T> {
-//     fn from(option: Option<T>) -> Self {
-//         option.map(Patch::Value).unwrap_or(Patch::Null)
-//     }
-// }
-//
-// impl<T> Into<Option<Option<T>>> for Patch<T> {
-//     fn into(self) -> Option<Option<T>> {
-//         match self {
-//             Patch::Value(v) => Some(Some(v)),
-//             Patch::Null => Some(None),
-//             Patch::Undefined => None,
-//         }
-//     }
-// }
-//
-// impl<T> From<Option<Option<T>>> for Patch<T> {
-//     fn from(double_option: Option<Option<T>>) -> Self {
-//         double_option
-//             .map(|v| v.map(Patch::Value).unwrap_or(Patch::Null))
-//             .unwrap_or(Patch::Undefined)
-//     }
-// }
-
-// #[test]
-// fn into_single_option() {
-//     let opt = Some(true);
-//     assert_eq!(opt, Patch::Value(true).into());
-//     let opt = None::<bool>;
-//     assert_eq!(opt, Patch::Null.into());
-// }
-//
-// #[test]
-// fn into_double_option() {
-//     let opt: Option<Option<_>> = Some(Some(true));
-//     assert_eq!(opt, Patch::Value(true).into());
-//     let opt: Option<Option<_>> = Some(None);
-//     assert_eq!(opt, Patch::<bool>::Null.into());
-//     let opt: Option<Option<_>> = None;
-//     assert_eq!(opt, Patch::<bool>::Undefined.into());
-// }

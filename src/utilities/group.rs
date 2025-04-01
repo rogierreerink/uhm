@@ -390,46 +390,42 @@ mod tests {
 
         impl From<Vec<Input>> for Pack<Vec<Output>> {
             fn from(input: Vec<Input>) -> Self {
-                Self::new(
-                    input
-                        .iter()
-                        .group_map(
-                            |i| i.id,
-                            |mut group| {
-                                // The first peek always returns Some(_)!
-                                let input = *group.peek().unwrap();
-                                let group = group.collect::<Vec<&Input>>();
+                input
+                    .iter()
+                    .group_map(
+                        |i| i.id,
+                        |mut group| {
+                            // The first peek always returns Some(_)!
+                            let input = *group.peek().unwrap();
+                            let group = group.collect::<Vec<&Input>>();
 
-                                Output {
-                                    id: input.id,
-                                    sub: Pack::from(group).unpack(),
-                                }
-                            },
-                        )
-                        .collect(),
-                )
+                            Output {
+                                id: input.id,
+                                sub: Pack::from(group).unpack(),
+                            }
+                        },
+                    )
+                    .collect()
             }
         }
 
         impl From<Vec<&Input>> for Pack<Vec<OutputSub>> {
             fn from(input: Vec<&Input>) -> Self {
-                Self::new(
-                    input
-                        .iter()
-                        .group_map(
-                            |i| i.sub.id,
-                            |mut group| {
-                                // The first peek always returns Some(_)!
-                                let input = **group.peek().unwrap();
+                input
+                    .iter()
+                    .group_map(
+                        |i| i.sub.id,
+                        |mut group| {
+                            // The first peek always returns Some(_)!
+                            let input = **group.peek().unwrap();
 
-                                OutputSub {
-                                    id: input.sub.id,
-                                    values: group.map(|input| input.sub.value).collect(),
-                                }
-                            },
-                        )
-                        .collect(),
-                )
+                            OutputSub {
+                                id: input.sub.id,
+                                values: group.map(|input| input.sub.value).collect(),
+                            }
+                        },
+                    )
+                    .collect()
             }
         }
 
@@ -468,7 +464,7 @@ mod tests {
             },
         ];
 
-        let output = Pack::from(vec).unpack();
+        let output: Vec<Output> = Pack::from(vec).unpack();
         let mut iter = output.iter();
 
         assert_eq!(
