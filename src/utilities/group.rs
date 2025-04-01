@@ -81,6 +81,10 @@ where
     pub fn key(&self) -> &K {
         self.key.as_ref().unwrap()
     }
+
+    pub fn peek(&mut self) -> Option<&I::Item> {
+        self.iter.peek()
+    }
 }
 
 impl<I, K> Iterator for Group<'_, I, K>
@@ -115,6 +119,26 @@ where
 #[cfg(test)]
 mod tests {
     use super::GroupIterExt;
+
+    #[test]
+    fn empty_iter() {
+        #[derive(PartialEq, Debug)]
+        struct Output {
+            key: usize,
+            sum: usize,
+        }
+
+        let vec = vec![];
+        let mut iter = vec.iter().group_map(
+            |i| **i,
+            |g| Output {
+                key: *g.key(),
+                sum: g.sum(),
+            },
+        );
+
+        assert_eq!(iter.next(), None);
+    }
 
     #[test]
     fn primitives() {
@@ -176,6 +200,7 @@ mod tests {
                 unique: 5,
             },
         ];
+
         let mut iter = vec.iter().group_map(
             |i| i.group,
             |g| Output {
@@ -222,6 +247,7 @@ mod tests {
             group: usize,
             subgroups: Vec<OutputSub>,
         }
+
         #[derive(PartialEq, Debug, Clone)]
         struct OutputSub {
             subgroup: usize,
@@ -270,15 +296,28 @@ mod tests {
                 value: 1,
             },
         ];
+
+        #[derive(PartialEq)]
+        struct Key {
+            group: usize,
+        }
+
+        #[derive(PartialEq)]
+        struct SubKey {
+            subgroup: usize,
+        }
+
         let mut iter = vec.iter().group_map(
-            |i| i.group,
+            |i| Key { group: i.group },
             |g| Output {
-                group: *g.key(),
+                group: g.key().group,
                 subgroups: g
                     .group_map(
-                        |i| i.subgroup,
+                        |i| SubKey {
+                            subgroup: i.subgroup,
+                        },
                         |g| OutputSub {
-                            subgroup: *g.key(),
+                            subgroup: g.key().subgroup,
                             values: g.map(|g| g.value).collect(),
                         },
                     )
@@ -313,6 +352,158 @@ mod tests {
                     },
                     OutputSub {
                         subgroup: 1,
+                        values: vec![0, 1]
+                    }
+                ]
+            })
+        );
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn impl_from_iter() {
+        #[derive(PartialEq, Debug, Clone)]
+        struct Input {
+            id: usize,
+            sub: InputSub,
+        }
+
+        #[derive(PartialEq, Debug, Clone)]
+        struct InputSub {
+            id: usize,
+            value: usize,
+        }
+
+        #[derive(PartialEq, Debug)]
+        struct Output {
+            id: usize,
+            sub: Vec<OutputSub>,
+        }
+
+        #[derive(PartialEq, Debug, Clone)]
+        struct OutputSub {
+            id: usize,
+            values: Vec<usize>,
+        }
+
+        struct Pack<T>(T);
+
+        impl<T> Pack<T> {
+            fn unpack(self) -> T {
+                self.0
+            }
+        }
+
+        impl From<Vec<Input>> for Pack<Vec<Output>> {
+            fn from(input: Vec<Input>) -> Self {
+                Self(
+                    input
+                        .iter()
+                        .group_map(
+                            |i| i.id,
+                            |mut group| {
+                                // The first peek always returns Some(_)!
+                                let input = *group.peek().unwrap();
+                                let group = group.collect::<Vec<&Input>>();
+
+                                Output {
+                                    id: input.id,
+                                    sub: Pack::from(group).unpack(),
+                                }
+                            },
+                        )
+                        .collect(),
+                )
+            }
+        }
+
+        impl From<Vec<&Input>> for Pack<Vec<OutputSub>> {
+            fn from(input: Vec<&Input>) -> Self {
+                Self(
+                    input
+                        .iter()
+                        .group_map(
+                            |i| i.sub.id,
+                            |mut group| {
+                                // The first peek always returns Some(_)!
+                                let input = **group.peek().unwrap();
+
+                                OutputSub {
+                                    id: input.sub.id,
+                                    values: group.map(|input| input.sub.value).collect(),
+                                }
+                            },
+                        )
+                        .collect(),
+                )
+            }
+        }
+
+        let vec = vec![
+            Input {
+                id: 0,
+                sub: InputSub { id: 0, value: 0 },
+            },
+            Input {
+                id: 0,
+                sub: InputSub { id: 0, value: 1 },
+            },
+            Input {
+                id: 0,
+                sub: InputSub { id: 1, value: 0 },
+            },
+            Input {
+                id: 0,
+                sub: InputSub { id: 1, value: 1 },
+            },
+            Input {
+                id: 1,
+                sub: InputSub { id: 0, value: 0 },
+            },
+            Input {
+                id: 1,
+                sub: InputSub { id: 0, value: 1 },
+            },
+            Input {
+                id: 1,
+                sub: InputSub { id: 1, value: 0 },
+            },
+            Input {
+                id: 1,
+                sub: InputSub { id: 1, value: 1 },
+            },
+        ];
+
+        let output = Pack::from(vec).unpack();
+        let mut iter = output.iter();
+
+        assert_eq!(
+            iter.next(),
+            Some(&Output {
+                id: 0,
+                sub: vec![
+                    OutputSub {
+                        id: 0,
+                        values: vec![0, 1]
+                    },
+                    OutputSub {
+                        id: 1,
+                        values: vec![0, 1]
+                    }
+                ]
+            })
+        );
+        assert_eq!(
+            iter.next(),
+            Some(&Output {
+                id: 1,
+                sub: vec![
+                    OutputSub {
+                        id: 0,
+                        values: vec![0, 1]
+                    },
+                    OutputSub {
+                        id: 1,
                         values: vec![0, 1]
                     }
                 ]
