@@ -118,6 +118,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::utilities::pack::Pack;
+
     use super::GroupIterExt;
 
     #[test]
@@ -386,17 +388,9 @@ mod tests {
             values: Vec<usize>,
         }
 
-        struct Pack<T>(T);
-
-        impl<T> Pack<T> {
-            fn unpack(self) -> T {
-                self.0
-            }
-        }
-
         impl From<Vec<Input>> for Pack<Vec<Output>> {
             fn from(input: Vec<Input>) -> Self {
-                Self(
+                Self::new(
                     input
                         .iter()
                         .group_map(
@@ -419,7 +413,7 @@ mod tests {
 
         impl From<Vec<&Input>> for Pack<Vec<OutputSub>> {
             fn from(input: Vec<&Input>) -> Self {
-                Self(
+                Self::new(
                     input
                         .iter()
                         .group_map(
