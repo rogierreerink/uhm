@@ -5,6 +5,7 @@ use deadpool_postgres::Manager;
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Row;
 use uuid::Uuid;
+use variants::variants;
 
 use crate::utilities::{group::GroupIterExt, pack::Pack};
 
@@ -12,10 +13,10 @@ use super::DbError;
 
 #[trait_variant::make(Send)]
 pub trait DbProducts {
-    async fn get(&mut self, params: &QueryParams) -> Result<Vec<ProductSummary>>;
+    async fn get(&mut self, params: &QueryParams) -> Result<Vec<Product>>;
     async fn get_by_id(&mut self, id: &Uuid) -> Result<Product>;
-    async fn create(&mut self, products: &Vec<ProductNew>) -> Result<Vec<Product>>;
-    async fn update(&mut self, id: &Uuid, product: &ProductUpdate) -> Result<Product>;
+    async fn create(&mut self, products: &Vec<ProductDataNew>) -> Result<Vec<ProductMinimal>>;
+    async fn update(&mut self, id: &Uuid, product: &ProductDataUpdate) -> Result<ProductMinimal>;
     async fn delete(&mut self, id: &Uuid) -> Result<()>;
 }
 
@@ -24,75 +25,19 @@ pub struct QueryParams {
     pub name: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct ProductSummary {
-    pub id: Uuid,
-    pub ts_created: DateTime<Utc>,
-    pub ts_updated: Option<DateTime<Utc>>,
-    pub data: ProductSummaryData,
-}
-
-impl From<&Vec<Row>> for Pack<Vec<ProductSummary>> {
-    fn from(rows: &Vec<Row>) -> Self {
-        rows.into_iter()
-            .group_map(
-                |row| row.get::<_, Uuid>("id"),
-                |mut group| {
-                    let row = *group.peek().unwrap();
-                    let group = group.collect::<Vec<&Row>>();
-
-                    ProductSummary {
-                        id: row.get("id"),
-                        ts_created: row.get("ts_created"),
-                        ts_updated: row.get("ts_updated"),
-                        data: Pack::<Option<ProductSummaryData>>::from(&group)
-                            .unpack()
-                            .expect("cannot fail as `group` will never be empty"),
-                    }
-                },
-            )
-            .collect()
-    }
-}
-
-#[derive(Serialize)]
-pub struct ProductSummaryData {
-    pub name: String,
-    pub shopping_list_item_links: Vec<ShoppingListItemLinkSummary>,
-}
-
-impl From<&Vec<&Row>> for Pack<Option<ProductSummaryData>> {
-    fn from(rows: &Vec<&Row>) -> Self {
-        rows.get(0)
-            .map(|row| ProductSummaryData {
-                name: row.get("name"),
-                shopping_list_item_links: Pack::from(rows).unpack(),
-            })
-            .into()
-    }
-}
-
-#[derive(Serialize)]
-pub struct ShoppingListItemLinkSummary {
-    id: Uuid,
-}
-
-impl From<&Vec<&Row>> for Pack<Vec<ShoppingListItemLinkSummary>> {
-    fn from(rows: &Vec<&Row>) -> Self {
-        rows.into_iter()
-            .filter_map(|row| {
-                row.get::<_, Option<Uuid>>("shopping_list_item_id")
-                    .map(|id| ShoppingListItemLinkSummary { id })
-            })
-            .collect()
-    }
-}
-
+#[variants(Minimal)]
 #[derive(Serialize)]
 pub struct Product {
+    #[variants(include(Minimal))]
     pub id: Uuid,
+
+    #[variants(include(Minimal))]
     pub ts_created: DateTime<Utc>,
+
+    #[variants(include(Minimal))]
     pub ts_updated: Option<DateTime<Utc>>,
+
+    #[variants(include(Minimal), retype = "{t}{v}")]
     pub data: ProductData,
 }
 
@@ -109,7 +54,7 @@ impl From<&Vec<Row>> for Pack<Vec<Product>> {
                         id: row.get("id"),
                         ts_created: row.get("ts_created"),
                         ts_updated: row.get("ts_updated"),
-                        data: Pack::<Option<ProductData>>::from(&group)
+                        data: Pack::<Option<_>>::from(&group)
                             .unpack()
                             .expect("cannot fail as `group` will never be empty"),
                     }
@@ -119,8 +64,11 @@ impl From<&Vec<Row>> for Pack<Vec<Product>> {
     }
 }
 
-#[derive(Serialize)]
+#[variants(New, Update, Minimal)]
+#[derive(Serialize, Deserialize)]
 pub struct ProductData {
+    #[variants(include(New, Minimal))]
+    #[variants(include(Update), retype = "Option<{t}>")]
     pub name: String,
     pub shopping_list_item_links: Vec<ShoppingListItemLink>,
 }
@@ -136,7 +84,7 @@ impl From<&Vec<&Row>> for Pack<Option<ProductData>> {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ShoppingListItemLink {
     id: Uuid,
 }
@@ -152,16 +100,6 @@ impl From<&Vec<&Row>> for Pack<Vec<ShoppingListItemLink>> {
     }
 }
 
-#[derive(Deserialize)]
-pub struct ProductNew {
-    pub name: String,
-}
-
-#[derive(Deserialize)]
-pub struct ProductUpdate {
-    pub name: Option<String>,
-}
-
 pub struct DbProductsPostgres {
     connection: Object<Manager>,
 }
@@ -173,7 +111,7 @@ impl DbProductsPostgres {
 }
 
 impl DbProducts for DbProductsPostgres {
-    async fn get(&mut self, params: &QueryParams) -> Result<Vec<ProductSummary>> {
+    async fn get(&mut self, params: &QueryParams) -> Result<Vec<Product>> {
         tracing::debug!("preparing cached statement");
         let stmt = self
             .connection
@@ -246,7 +184,7 @@ impl DbProducts for DbProductsPostgres {
         }
     }
 
-    async fn create(&mut self, products: &Vec<ProductNew>) -> Result<Vec<Product>> {
+    async fn create(&mut self, products: &Vec<ProductDataNew>) -> Result<Vec<ProductMinimal>> {
         tracing::debug!("starting database transaction");
         let transaction = self.connection.transaction().await?;
 
@@ -275,13 +213,12 @@ impl DbProducts for DbProductsPostgres {
                 .query_one(&stmt, &[&product_id, &product.name])
                 .await?;
 
-            inserted.push(Product {
+            inserted.push(ProductMinimal {
                 id: product_id,
                 ts_created: row.get("ts_created"),
                 ts_updated: None,
-                data: ProductData {
+                data: ProductDataMinimal {
                     name: product.name.clone(),
-                    shopping_list_item_links: vec![],
                 },
             })
         }
@@ -292,7 +229,7 @@ impl DbProducts for DbProductsPostgres {
         Ok(inserted)
     }
 
-    async fn update(&mut self, id: &Uuid, product: &ProductUpdate) -> Result<Product> {
+    async fn update(&mut self, id: &Uuid, product: &ProductDataUpdate) -> Result<ProductMinimal> {
         tracing::debug!("starting database transaction");
         let transaction = self.connection.transaction().await?;
 
@@ -357,13 +294,12 @@ impl DbProducts for DbProductsPostgres {
         tracing::debug!("committing database transaction");
         transaction.commit().await?;
 
-        Ok(Product {
+        Ok(ProductMinimal {
             id: id.clone(),
             ts_created: current.ts_created.clone(),
             ts_updated: updated_row.get("ts_updated"),
-            data: ProductData {
+            data: ProductDataMinimal {
                 name: product.name.as_ref().unwrap_or(&current.data.name).clone(),
-                shopping_list_item_links: current.data.shopping_list_item_links,
             },
         })
     }

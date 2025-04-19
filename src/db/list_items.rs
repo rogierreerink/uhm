@@ -5,173 +5,36 @@ use deadpool_postgres::Manager;
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Row;
 use uuid::Uuid;
+use variants::variants;
 
 use super::DbError;
 
 #[trait_variant::make(Send)]
 pub trait DbListItems {
-    async fn get(&mut self) -> Result<Vec<ListItemSummary>>;
+    async fn get(&mut self) -> Result<Vec<ListItem>>;
     async fn get_by_id(&mut self, id: &Uuid) -> Result<ListItem>;
-    async fn create(&mut self, list_items: &Vec<ListItemNew>) -> Result<Vec<ListItemMinimal>>;
-    async fn update(&mut self, id: &Uuid, list_item: &ListItemUpdate) -> Result<ListItemMinimal>;
+    async fn create(&mut self, list_items: &Vec<ListItemDataNew>) -> Result<Vec<ListItemMinimal>>;
+    async fn update(
+        &mut self,
+        id: &Uuid,
+        list_item: &ListItemDataUpdate,
+    ) -> Result<ListItemMinimal>;
     async fn delete(&mut self, id: &Uuid) -> Result<()>;
 }
 
-#[derive(Serialize)]
-pub struct ListItemSummary {
-    pub id: Uuid,
-    pub ts_created: DateTime<Utc>,
-    pub ts_updated: Option<DateTime<Utc>>,
-    pub data: ListItemDataSummary,
-}
-
-impl From<&Row> for ListItemSummary {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("id"),
-            ts_created: row.get("ts_created"),
-            ts_updated: row.get("ts_updated"),
-            data: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct ListItemDataSummary {
-    pub checked: bool,
-    pub kind: ListItemKindSummary,
-}
-
-impl From<&Row> for ListItemDataSummary {
-    fn from(row: &Row) -> Self {
-        Self {
-            checked: row.get("checked"),
-            kind: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ListItemKindSummary {
-    Product { id: Uuid, data: ProductDataSummary },
-    Temporary { data: TemporaryDataSummary },
-}
-
-impl From<&Row> for ListItemKindSummary {
-    fn from(row: &Row) -> Self {
-        if let Some(_) = row.get::<_, Option<Uuid>>("product_list_item_id") {
-            Self::Product {
-                id: row.get("product_id"),
-                data: row.into(),
-            }
-        } else if let Some(_) = row.get::<_, Option<Uuid>>("temporary_list_item_id") {
-            Self::Temporary { data: row.into() }
-        } else {
-            panic!()
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct ProductDataSummary {
-    name: String,
-}
-
-impl From<&Row> for ProductDataSummary {
-    fn from(row: &Row) -> Self {
-        Self {
-            name: row.get("product_name"),
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct TemporaryDataSummary {
-    name: String,
-}
-
-impl From<&Row> for TemporaryDataSummary {
-    fn from(row: &Row) -> Self {
-        Self {
-            name: row.get("temporary_name"),
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct ListItemMinimal {
-    pub id: Uuid,
-    pub ts_created: DateTime<Utc>,
-    pub ts_updated: Option<DateTime<Utc>>,
-    pub data: ListItemDataMinimal,
-}
-
-impl From<&Row> for ListItemMinimal {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("id"),
-            ts_created: row.get("ts_created"),
-            ts_updated: row.get("ts_updated"),
-            data: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct ListItemDataMinimal {
-    pub checked: bool,
-    pub kind: ListItemKindMinimal,
-}
-
-impl From<&Row> for ListItemDataMinimal {
-    fn from(row: &Row) -> Self {
-        Self {
-            checked: row.get("checked"),
-            kind: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ListItemKindMinimal {
-    Product { id: Uuid },
-    Temporary { data: TemporaryDataMinimal },
-}
-
-impl From<&Row> for ListItemKindMinimal {
-    fn from(row: &Row) -> Self {
-        if let Some(_) = row.get::<_, Option<Uuid>>("product_list_item_id") {
-            Self::Product {
-                id: row.get("product_id"),
-            }
-        } else if let Some(_) = row.get::<_, Option<Uuid>>("temporary_list_item_id") {
-            Self::Temporary { data: row.into() }
-        } else {
-            panic!()
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct TemporaryDataMinimal {
-    name: String,
-}
-
-impl From<&Row> for TemporaryDataMinimal {
-    fn from(row: &Row) -> Self {
-        Self {
-            name: row.get("temporary_name"),
-        }
-    }
-}
-
+#[variants(Minimal)]
 #[derive(Serialize)]
 pub struct ListItem {
+    #[variants(include(Minimal))]
     pub id: Uuid,
+
+    #[variants(include(Minimal))]
     pub ts_created: DateTime<Utc>,
+
+    #[variants(include(Minimal))]
     pub ts_updated: Option<DateTime<Utc>>,
+
+    #[variants(include(Minimal), retype = "{t}{v}")]
     pub data: ListItemData,
 }
 
@@ -186,9 +49,16 @@ impl From<&Row> for ListItem {
     }
 }
 
-#[derive(Serialize)]
+#[variants(Minimal, New, Update)]
+#[derive(Serialize, Deserialize)]
 pub struct ListItemData {
+    #[variants(include(Minimal))]
+    #[variants(include(New, Update), retype = "Option<{t}>")]
     pub checked: bool,
+
+    #[variants(include(Minimal), retype = "{t}{v}")]
+    #[variants(include(New), retype = "{t}{v}")]
+    #[variants(include(Update), retype = "Option<{t}{v}>")]
     pub kind: ListItemKind,
 }
 
@@ -201,29 +71,44 @@ impl From<&Row> for ListItemData {
     }
 }
 
-#[derive(Serialize)]
+#[variants(Minimal, New, Update)]
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ListItemKind {
-    Product { id: Uuid, data: ProductData },
-    Temporary { data: TemporaryData },
+    Product {
+        #[variants(include(Minimal, New))]
+        #[variants(include(Update), retype = "Option<{t}>")]
+        id: Uuid,
+        data: ProductData,
+    },
+    Temporary {
+        #[variants(include(Minimal, New), retype = "{t}{v}")]
+        #[variants(include(Update), retype = "Option<{t}{v}>")]
+        data: TemporaryData,
+    },
 }
 
+#[variants(Minimal)]
 impl From<&Row> for ListItemKind {
     fn from(row: &Row) -> Self {
         if let Some(_) = row.get::<_, Option<Uuid>>("product_list_item_id") {
             Self::Product {
+                #[variants(include(Minimal))]
                 id: row.get("product_id"),
                 data: row.into(),
             }
         } else if let Some(_) = row.get::<_, Option<Uuid>>("temporary_list_item_id") {
-            Self::Temporary { data: row.into() }
+            Self::Temporary {
+                #[variants(include(Minimal))]
+                data: row.into(),
+            }
         } else {
             panic!()
         }
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ProductData {
     name: String,
 }
@@ -236,53 +121,22 @@ impl From<&Row> for ProductData {
     }
 }
 
-#[derive(Serialize)]
+#[variants(Minimal, New, Update)]
+#[derive(Serialize, Deserialize)]
 pub struct TemporaryData {
+    #[variants(include(Minimal, New))]
+    #[variants(include(Update), retype = "Option<{t}>")]
     name: String,
 }
 
+#[variants(Minimal)]
 impl From<&Row> for TemporaryData {
     fn from(row: &Row) -> Self {
         Self {
+            #[variants(include(Minimal))]
             name: row.get("temporary_name"),
         }
     }
-}
-
-#[derive(Deserialize)]
-pub struct ListItemNew {
-    pub checked: Option<bool>,
-    pub kind: ListItemNewKind,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ListItemNewKind {
-    Product { id: Uuid },
-    Temporary { data: TemporaryDataNew },
-}
-
-#[derive(Deserialize)]
-pub struct TemporaryDataNew {
-    name: String,
-}
-
-#[derive(Deserialize)]
-pub struct ListItemUpdate {
-    pub checked: Option<bool>,
-    pub kind: Option<ListItemUpdateKind>,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ListItemUpdateKind {
-    Product { id: Option<Uuid> },
-    Temporary { data: Option<TemporaryDataUpdate> },
-}
-
-#[derive(Deserialize)]
-pub struct TemporaryDataUpdate {
-    name: Option<String>,
 }
 
 pub struct DbListItemsPostgres {
@@ -296,7 +150,7 @@ impl DbListItemsPostgres {
 }
 
 impl DbListItems for DbListItemsPostgres {
-    async fn get(&mut self) -> Result<Vec<ListItemSummary>> {
+    async fn get(&mut self) -> Result<Vec<ListItem>> {
         tracing::debug!("preparing cached statement");
         let stmt = self
             .connection
@@ -381,7 +235,7 @@ impl DbListItems for DbListItemsPostgres {
         Ok(list_item)
     }
 
-    async fn create(&mut self, list_items: &Vec<ListItemNew>) -> Result<Vec<ListItemMinimal>> {
+    async fn create(&mut self, list_items: &Vec<ListItemDataNew>) -> Result<Vec<ListItemMinimal>> {
         tracing::debug!("starting database transaction");
         let transaction = self.connection.transaction().await?;
 
@@ -391,7 +245,7 @@ impl DbListItems for DbListItemsPostgres {
             let kind_id = Uuid::new_v4();
 
             inserted.push(match &list_item.kind {
-                ListItemNewKind::Product { id } => {
+                ListItemKindNew::Product { id } => {
                     tracing::debug!("create product list item: preparing cached statement");
                     let stmt = transaction
                         .prepare_cached(
@@ -444,7 +298,7 @@ impl DbListItems for DbListItemsPostgres {
                         },
                     }
                 }
-                ListItemNewKind::Temporary { data } => {
+                ListItemKindNew::Temporary { data } => {
                     tracing::debug!("create temporary list item: preparing cached statement");
                     let stmt = transaction
                         .prepare_cached(
@@ -510,7 +364,11 @@ impl DbListItems for DbListItemsPostgres {
         Ok(inserted)
     }
 
-    async fn update(&mut self, id: &Uuid, list_item: &ListItemUpdate) -> Result<ListItemMinimal> {
+    async fn update(
+        &mut self,
+        id: &Uuid,
+        list_item: &ListItemDataUpdate,
+    ) -> Result<ListItemMinimal> {
         tracing::debug!("starting database transaction");
         let transaction = self.connection.transaction().await?;
 
@@ -548,7 +406,7 @@ impl DbListItems for DbListItemsPostgres {
         };
 
         let updated_kind = match &list_item.kind {
-            Some(ListItemUpdateKind::Product { id }) => {
+            Some(ListItemKindUpdate::Product { id }) => {
                 let list_item_id: Uuid = match current.get("product_list_item_id") {
                     Some(id) => id,
                     None => return Err(DbError::InvalidOperation.into()),
@@ -581,7 +439,7 @@ impl DbListItems for DbListItemsPostgres {
                 ListItemKindMinimal::Product { id: product_id }
             }
 
-            Some(ListItemUpdateKind::Temporary { data }) => {
+            Some(ListItemKindUpdate::Temporary { data }) => {
                 let list_item_id: Uuid = match current.get("temporary_list_item_id") {
                     Some(id) => id,
                     None => return Err(DbError::InvalidOperation.into()),

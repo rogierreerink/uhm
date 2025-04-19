@@ -1,4 +1,4 @@
-use crate::db::ingredients::{DbIngredients, IngredientUpdate};
+use crate::db::ingredients::{DbIngredients, IngredientDataUpdate};
 use crate::db::Db;
 use crate::global::AppState;
 use crate::{api::handle_options, db::DbError};
@@ -72,7 +72,7 @@ pub async fn get_resource(
 pub async fn patch_resource(
     State(state): State<Arc<AppState>>,
     Path((collection_id, id)): Path<(Uuid, Uuid)>,
-    Json(ingredient): Json<IngredientUpdate>,
+    Json(ingredient): Json<IngredientDataUpdate>,
 ) -> impl IntoResponse {
     let mut db_ingredients = match state.db().ingredients().await {
         Ok(db) => db,

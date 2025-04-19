@@ -5,6 +5,7 @@ use deadpool_postgres::Manager;
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Row;
 use uuid::Uuid;
+use variants::variants;
 
 use crate::utilities::{group::GroupIterExt, pack::Pack};
 
@@ -12,57 +13,38 @@ use super::DbError;
 
 #[trait_variant::make(Send)]
 pub trait DbIngredientCollections {
-    async fn get(&mut self) -> Result<Vec<IngredientCollectionSummary>>;
+    async fn get(&mut self) -> Result<Vec<IngredientCollectionMinimal>>;
     async fn get_by_id(&mut self, id: &Uuid) -> Result<IngredientCollection>;
     async fn create(
         &mut self,
-        ingredient_collections: &Vec<IngredientCollectionNew>,
-    ) -> Result<Vec<IngredientCollectionSummary>>;
+        ingredient_collections: &Vec<IngredientCollectionDataNew>,
+    ) -> Result<Vec<IngredientCollectionMinimal>>;
     async fn update(
         &mut self,
         id: &Uuid,
-        ingredient_collection: &IngredientCollectionUpdate,
-    ) -> Result<IngredientCollectionSummary>;
+        ingredient_collection: &IngredientCollectionDataUpdate,
+    ) -> Result<IngredientCollectionMinimal>;
     async fn delete(&mut self, id: &Uuid) -> Result<()>;
 }
 
-#[derive(Serialize)]
-pub struct IngredientCollectionSummary {
-    pub id: Uuid,
-    pub ts_created: DateTime<Utc>,
-    pub ts_updated: Option<DateTime<Utc>>,
-    pub data: IngredientCollectionSummaryData,
-}
-
-impl From<&Row> for IngredientCollectionSummary {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("id"),
-            ts_created: row.get("ts_created"),
-            ts_updated: row.get("ts_updated"),
-            data: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct IngredientCollectionSummaryData {}
-
-impl From<&Row> for IngredientCollectionSummaryData {
-    fn from(_: &Row) -> Self {
-        Self {}
-    }
-}
-
+#[variants(Minimal)]
 #[derive(Serialize)]
 pub struct IngredientCollection {
+    #[variants(include(Minimal))]
     pub id: Uuid,
+
+    #[variants(include(Minimal))]
     pub ts_created: DateTime<Utc>,
+
+    #[variants(include(Minimal))]
     pub ts_updated: Option<DateTime<Utc>>,
+
+    #[variants(include(Minimal), retype = "{t}{v}")]
     pub data: IngredientCollectionData,
 }
 
-impl From<&Vec<Row>> for Pack<Vec<IngredientCollection>> {
+#[variants(Minimal)]
+impl From<&Vec<Row>> for Pack<Vec<base!(IngredientCollection)>> {
     fn from(rows: &Vec<Row>) -> Self {
         rows.into_iter()
             .group_map(
@@ -71,11 +53,19 @@ impl From<&Vec<Row>> for Pack<Vec<IngredientCollection>> {
                     let row = *group.peek().unwrap();
                     let group = group.collect::<Vec<&Row>>();
 
+                    #[variants(include(Minimal), vary_type)]
                     IngredientCollection {
+                        #[variants(include(Minimal))]
                         id: row.get("id"),
+
+                        #[variants(include(Minimal))]
                         ts_created: row.get("ts_created"),
+
+                        #[variants(include(Minimal))]
                         ts_updated: row.get("ts_updated"),
-                        data: IngredientCollectionData::from(&group),
+
+                        #[variants(include(Minimal))]
+                        data: (&group).into(),
                     }
                 },
             )
@@ -83,20 +73,23 @@ impl From<&Vec<Row>> for Pack<Vec<IngredientCollection>> {
     }
 }
 
-#[derive(Serialize)]
+#[variants(Minimal, New, Update)]
+#[derive(Serialize, Deserialize)]
 pub struct IngredientCollectionData {
     ingredients: Vec<Ingredient>,
 }
 
+#[variants(Minimal)]
 impl From<&Vec<&Row>> for IngredientCollectionData {
     fn from(rows: &Vec<&Row>) -> Self {
+        #[variants(include(Minimal), vary_type)]
         IngredientCollectionData {
             ingredients: Pack::from(rows).unpack(),
         }
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Ingredient {
     id: Uuid,
     data: IngredientData,
@@ -116,7 +109,7 @@ impl From<&Vec<&Row>> for Pack<Vec<Ingredient>> {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct IngredientData {
     product: Product,
 }
@@ -129,7 +122,7 @@ impl From<&Row> for IngredientData {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Product {
     id: Uuid,
     data: ProductData,
@@ -144,7 +137,7 @@ impl From<&Row> for Product {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ProductData {
     name: String,
 }
@@ -157,12 +150,6 @@ impl From<&Row> for ProductData {
     }
 }
 
-#[derive(Deserialize)]
-pub struct IngredientCollectionNew {}
-
-#[derive(Deserialize)]
-pub struct IngredientCollectionUpdate {}
-
 pub struct DbIngredientCollectionsPostgres {
     connection: Object<Manager>,
 }
@@ -174,7 +161,7 @@ impl DbIngredientCollectionsPostgres {
 }
 
 impl DbIngredientCollections for DbIngredientCollectionsPostgres {
-    async fn get(&mut self) -> Result<Vec<IngredientCollectionSummary>> {
+    async fn get(&mut self) -> Result<Vec<IngredientCollectionMinimal>> {
         tracing::debug!("preparing cached statement");
         let stmt = self
             .connection
@@ -188,13 +175,10 @@ impl DbIngredientCollections for DbIngredientCollectionsPostgres {
             .await?;
 
         tracing::debug!("executing query");
-        let collections = self
-            .connection
-            .query(&stmt, &[])
-            .await?
-            .into_iter()
-            .map(|row| (&row).into())
-            .collect();
+        let collections = Pack::<Vec<IngredientCollectionMinimal>>::from(
+            &self.connection.query(&stmt, &[]).await?,
+        )
+        .unpack();
 
         Ok(collections)
     }
@@ -242,8 +226,8 @@ impl DbIngredientCollections for DbIngredientCollectionsPostgres {
 
     async fn create(
         &mut self,
-        ingredient_collections: &Vec<IngredientCollectionNew>,
-    ) -> Result<Vec<IngredientCollectionSummary>> {
+        ingredient_collections: &Vec<IngredientCollectionDataNew>,
+    ) -> Result<Vec<IngredientCollectionMinimal>> {
         tracing::debug!("starting database transaction");
         let transaction = self.connection.transaction().await?;
 
@@ -267,11 +251,11 @@ impl DbIngredientCollections for DbIngredientCollectionsPostgres {
                 .query_one(&stmt, &[&ingredient_collection_id])
                 .await?;
 
-            inserted.push(IngredientCollectionSummary {
+            inserted.push(IngredientCollectionMinimal {
                 id: ingredient_collection_id,
                 ts_created: row.get("ts_created"),
                 ts_updated: None,
-                data: IngredientCollectionSummaryData {},
+                data: IngredientCollectionDataMinimal {},
             });
         }
 
@@ -284,8 +268,8 @@ impl DbIngredientCollections for DbIngredientCollectionsPostgres {
     async fn update(
         &mut self,
         id: &Uuid,
-        _: &IngredientCollectionUpdate,
-    ) -> Result<IngredientCollectionSummary> {
+        _: &IngredientCollectionDataUpdate,
+    ) -> Result<IngredientCollectionMinimal> {
         tracing::debug!("starting database transaction");
         let transaction = self.connection.transaction().await?;
 
@@ -329,11 +313,11 @@ impl DbIngredientCollections for DbIngredientCollectionsPostgres {
         tracing::debug!("committing database transaction");
         transaction.commit().await?;
 
-        Ok(IngredientCollectionSummary {
+        Ok(IngredientCollectionMinimal {
             id: *id,
             ts_created: current.get("ts_created"),
             ts_updated: updated.get("ts_updated"),
-            data: IngredientCollectionSummaryData {},
+            data: IngredientCollectionDataMinimal {},
         })
     }
 

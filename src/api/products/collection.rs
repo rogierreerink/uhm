@@ -1,4 +1,4 @@
-use crate::db::products::{DbProducts, Product, ProductNew, ProductSummary, QueryParams};
+use crate::db::products::{DbProducts, Product, ProductDataNew, ProductMinimal, QueryParams};
 use crate::global::AppState;
 use crate::{api::handle_options, db::Db};
 
@@ -39,7 +39,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
 #[derive(Serialize)]
 struct GetResponse {
-    data: Vec<ProductSummary>,
+    data: Vec<Product>,
 }
 
 #[axum::debug_handler]
@@ -69,12 +69,12 @@ pub async fn get_collection(
 
 #[derive(Deserialize)]
 struct PostRequest {
-    data: Vec<ProductNew>,
+    data: Vec<ProductDataNew>,
 }
 
 #[derive(Serialize)]
 struct PostResponse {
-    data: Vec<Product>,
+    data: Vec<ProductMinimal>,
 }
 
 #[axum::debug_handler]

@@ -1,4 +1,4 @@
-use crate::db::list_items::{DbListItems, ListItemMinimal, ListItemNew, ListItemSummary};
+use crate::db::list_items::{DbListItems, ListItem, ListItemDataNew, ListItemMinimal};
 use crate::global::AppState;
 use crate::{api::handle_options, db::Db};
 
@@ -38,7 +38,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
 #[derive(Serialize)]
 struct GetResponse {
-    data: Vec<ListItemSummary>,
+    data: Vec<ListItem>,
 }
 
 #[axum::debug_handler]
@@ -65,7 +65,7 @@ pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResp
 
 #[derive(Deserialize)]
 struct PostRequest {
-    data: Vec<ListItemNew>,
+    data: Vec<ListItemDataNew>,
 }
 
 #[derive(Serialize)]

@@ -1,5 +1,5 @@
 use crate::db::ingredient_collections::{
-    DbIngredientCollections, IngredientCollectionNew, IngredientCollectionSummary,
+    DbIngredientCollections, IngredientCollectionDataNew, IngredientCollectionMinimal,
 };
 use crate::global::AppState;
 use crate::{api::handle_options, db::Db};
@@ -40,7 +40,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
 #[derive(Serialize)]
 struct GetResponse {
-    data: Vec<IngredientCollectionSummary>,
+    data: Vec<IngredientCollectionMinimal>,
 }
 
 #[axum::debug_handler]
@@ -67,12 +67,12 @@ pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResp
 
 #[derive(Deserialize)]
 struct PostRequest {
-    data: Vec<IngredientCollectionNew>,
+    data: Vec<IngredientCollectionDataNew>,
 }
 
 #[derive(Serialize)]
 struct PostResponse {
-    data: Vec<IngredientCollectionSummary>,
+    data: Vec<IngredientCollectionMinimal>,
 }
 
 #[axum::debug_handler]

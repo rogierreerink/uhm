@@ -5,155 +5,110 @@ use deadpool_postgres::Manager;
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Row;
 use uuid::Uuid;
+use variants::variants;
 
 use super::DbError;
 
 #[trait_variant::make(Send)]
 pub trait DbBlocks {
-    async fn get(&mut self) -> Result<Vec<BlockSummary>>;
+    async fn get(&mut self) -> Result<Vec<BlockMinimal>>;
     async fn get_by_id(&mut self, id: &Uuid) -> Result<Block>;
-    async fn create(&mut self, blocks: &Vec<BlockNew>) -> Result<Vec<Block>>;
-    async fn update(&mut self, id: &Uuid, block: &BlockUpdate) -> Result<Block>;
+    async fn create(&mut self, blocks: &Vec<BlockDataNew>) -> Result<Vec<BlockMinimal>>;
+    async fn update(&mut self, id: &Uuid, block: &BlockDataUpdate) -> Result<BlockMinimal>;
     async fn delete(&mut self, id: &Uuid) -> Result<()>;
 }
 
-#[derive(Serialize)]
-pub struct BlockSummary {
-    pub id: Uuid,
-    pub ts_created: DateTime<Utc>,
-    pub ts_updated: Option<DateTime<Utc>>,
-    pub data: BlockSummaryData,
-}
-
-impl From<&Row> for BlockSummary {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("id"),
-            ts_created: row.get("ts_created"),
-            ts_updated: row.get("ts_updated"),
-            data: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct BlockSummaryData {
-    pub kind: BlockSummaryKind,
-}
-
-impl From<&Row> for BlockSummaryData {
-    fn from(row: &Row) -> Self {
-        Self { kind: row.into() }
-    }
-}
-
-#[derive(Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum BlockSummaryKind {
-    IngredientCollection {
-        id: Uuid,
-        data: IngredientCollectionSummaryData,
-    },
-    Paragraph {
-        data: ParagraphSummaryData,
-    },
-}
-
-impl From<&Row> for BlockSummaryKind {
-    fn from(row: &Row) -> Self {
-        if let Some(_) = row.get::<_, Option<Uuid>>("ingredient_collection_block_id") {
-            Self::IngredientCollection {
-                id: row.get("ingredient_collection_id"),
-                data: row.into(),
-            }
-        } else if let Some(_) = row.get::<_, Option<Uuid>>("paragraph_block_id") {
-            Self::Paragraph { data: row.into() }
-        } else {
-            panic!()
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct IngredientCollectionSummaryData {}
-
-impl From<&Row> for IngredientCollectionSummaryData {
-    fn from(_: &Row) -> Self {
-        Self {}
-    }
-}
-
-#[derive(Serialize)]
-pub struct ParagraphSummaryData {
-    pub text: String,
-}
-
-impl From<&Row> for ParagraphSummaryData {
-    fn from(row: &Row) -> Self {
-        Self {
-            text: row.get("paragraph_block_text"),
-        }
-    }
-}
-
+#[variants(Minimal)]
 #[derive(Serialize)]
 pub struct Block {
+    #[variants(include(Minimal))]
     pub id: Uuid,
+
+    #[variants(include(Minimal))]
     pub ts_created: DateTime<Utc>,
+
+    #[variants(include(Minimal))]
     pub ts_updated: Option<DateTime<Utc>>,
+
+    #[variants(include(Minimal), retype = "{t}{v}")]
     pub data: BlockData,
 }
 
+#[variants(Minimal)]
 impl From<&Row> for Block {
     fn from(row: &Row) -> Self {
         Self {
+            #[variants(include(Minimal))]
             id: row.get("id"),
+
+            #[variants(include(Minimal))]
             ts_created: row.get("ts_created"),
+
+            #[variants(include(Minimal))]
             ts_updated: row.get("ts_updated"),
+
+            #[variants(include(Minimal))]
             data: row.into(),
         }
     }
 }
 
-#[derive(Serialize)]
+#[variants(Minimal, New, Update)]
+#[derive(Serialize, Deserialize)]
 pub struct BlockData {
+    #[variants(include(Minimal, New), retype = "{t}{v}")]
+    #[variants(include(Update), retype = "Option<{t}{v}>")]
     pub kind: BlockKind,
 }
 
+#[variants(Minimal)]
 impl From<&Row> for BlockData {
     fn from(row: &Row) -> Self {
-        Self { kind: row.into() }
+        Self {
+            #[variants(include(Minimal))]
+            kind: row.into(),
+        }
     }
 }
 
-#[derive(Serialize)]
+#[variants(Minimal, New, Update)]
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BlockKind {
     IngredientCollection {
+        #[variants(include(Minimal, New))]
+        #[variants(include(Update), retype = "Option<{t}>")]
         id: Uuid,
         data: IngredientCollectionData,
     },
     Paragraph {
+        #[variants(include(Minimal, New), retype = "{t}{v}")]
+        #[variants(include(Update), retype = "Option<{t}{v}>")]
         data: ParagraphData,
     },
 }
 
+#[variants(Minimal)]
 impl From<&Row> for BlockKind {
     fn from(row: &Row) -> Self {
         if let Some(_) = row.get::<_, Option<Uuid>>("ingredient_collection_block_id") {
             Self::IngredientCollection {
+                #[variants(include(Minimal))]
                 id: row.get("ingredient_collection_id"),
                 data: row.into(),
             }
         } else if let Some(_) = row.get::<_, Option<Uuid>>("paragraph_block_id") {
-            Self::Paragraph { data: row.into() }
+            Self::Paragraph {
+                #[variants(include(Minimal))]
+                data: row.into(),
+            }
         } else {
             panic!()
         }
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct IngredientCollectionData {}
 
 impl From<&Row> for IngredientCollectionData {
@@ -162,51 +117,22 @@ impl From<&Row> for IngredientCollectionData {
     }
 }
 
-#[derive(Serialize)]
+#[variants(Minimal, New, Update)]
+#[derive(Serialize, Deserialize)]
 pub struct ParagraphData {
+    #[variants(include(Minimal, New))]
+    #[variants(include(Update), retype = "Option<{t}>")]
     pub text: String,
 }
 
+#[variants(Minimal)]
 impl From<&Row> for ParagraphData {
     fn from(row: &Row) -> Self {
         Self {
+            #[variants(include(Minimal))]
             text: row.get("paragraph_block_text"),
         }
     }
-}
-
-#[derive(Deserialize)]
-pub struct BlockNew {
-    pub kind: BlockNewKind,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum BlockNewKind {
-    IngredientCollection { id: Uuid },
-    Paragraph { data: ParagraphNewData },
-}
-
-#[derive(Deserialize)]
-pub struct ParagraphNewData {
-    pub text: String,
-}
-
-#[derive(Deserialize)]
-pub struct BlockUpdate {
-    pub kind: Option<BlockUpdateKind>,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum BlockUpdateKind {
-    IngredientCollection { id: Option<Uuid> },
-    Paragraph { data: Option<ParagraphUpdateData> },
-}
-
-#[derive(Deserialize)]
-pub struct ParagraphUpdateData {
-    pub text: Option<String>,
 }
 
 pub struct DbBlocksPostgres {
@@ -220,7 +146,7 @@ impl DbBlocksPostgres {
 }
 
 impl DbBlocks for DbBlocksPostgres {
-    async fn get(&mut self) -> Result<Vec<BlockSummary>> {
+    async fn get(&mut self) -> Result<Vec<BlockMinimal>> {
         tracing::debug!("preparing cached statement");
         let stmt = self
             .connection
@@ -294,7 +220,7 @@ impl DbBlocks for DbBlocksPostgres {
         Ok(block)
     }
 
-    async fn create(&mut self, blocks: &Vec<BlockNew>) -> Result<Vec<Block>> {
+    async fn create(&mut self, blocks: &Vec<BlockDataNew>) -> Result<Vec<BlockMinimal>> {
         tracing::debug!("starting database transaction");
         let transaction = self.connection.transaction().await?;
 
@@ -304,7 +230,7 @@ impl DbBlocks for DbBlocksPostgres {
             let kind_id = Uuid::new_v4();
 
             inserted.push(match &block.kind {
-                BlockNewKind::IngredientCollection { id } => {
+                BlockKindNew::IngredientCollection { id } => {
                     tracing::debug!(
                         "create ingredient collection block: preparing cached statement"
                     );
@@ -344,19 +270,16 @@ impl DbBlocks for DbBlocksPostgres {
                     tracing::debug!("create block: executing query");
                     let row = transaction.query_one(&stmt, &[&block_id, &kind_id]).await?;
 
-                    Block {
+                    BlockMinimal {
                         id: block_id,
                         ts_created: row.get("ts_created"),
                         ts_updated: None,
-                        data: BlockData {
-                            kind: BlockKind::IngredientCollection {
-                                id: *id,
-                                data: IngredientCollectionData {},
-                            },
+                        data: BlockDataMinimal {
+                            kind: BlockKindMinimal::IngredientCollection { id: *id },
                         },
                     }
                 }
-                BlockNewKind::Paragraph { data } => {
+                BlockKindNew::Paragraph { data } => {
                     tracing::debug!("create paragraph block: preparing cached statement");
                     let stmt = transaction
                         .prepare_cached(
@@ -394,13 +317,13 @@ impl DbBlocks for DbBlocksPostgres {
                     tracing::debug!("create block: executing query");
                     let row = transaction.query_one(&stmt, &[&block_id, &kind_id]).await?;
 
-                    Block {
+                    BlockMinimal {
                         id: block_id,
                         ts_created: row.get("ts_created"),
                         ts_updated: None,
-                        data: BlockData {
-                            kind: BlockKind::Paragraph {
-                                data: ParagraphData {
+                        data: BlockDataMinimal {
+                            kind: BlockKindMinimal::Paragraph {
+                                data: ParagraphDataMinimal {
                                     text: data.text.clone(),
                                 },
                             },
@@ -416,7 +339,7 @@ impl DbBlocks for DbBlocksPostgres {
         Ok(inserted)
     }
 
-    async fn update(&mut self, id: &Uuid, block: &BlockUpdate) -> Result<Block> {
+    async fn update(&mut self, id: &Uuid, block: &BlockDataUpdate) -> Result<BlockMinimal> {
         tracing::debug!("starting database transaction");
         let transaction = self.connection.transaction().await?;
 
@@ -452,7 +375,7 @@ impl DbBlocks for DbBlocksPostgres {
         };
 
         let updated_block_kind = match &block.kind {
-            Some(BlockUpdateKind::IngredientCollection { id }) => {
+            Some(BlockKindUpdate::IngredientCollection { id }) => {
                 let block_id: Uuid = match current.get("ingredient_collection_block_id") {
                     Some(id) => id,
                     None => return Err(DbError::InvalidOperation.into()),
@@ -483,13 +406,12 @@ impl DbBlocks for DbBlocksPostgres {
                     _ => (),
                 }
 
-                BlockKind::IngredientCollection {
+                BlockKindMinimal::IngredientCollection {
                     id: ingredient_collection_id,
-                    data: IngredientCollectionData {},
                 }
             }
 
-            Some(BlockUpdateKind::Paragraph { data }) => {
+            Some(BlockKindUpdate::Paragraph { data }) => {
                 let block_id: Uuid = match current.get("paragraph_block_id") {
                     Some(id) => id,
                     None => return Err(DbError::InvalidOperation.into()),
@@ -519,12 +441,12 @@ impl DbBlocks for DbBlocksPostgres {
                     _ => (),
                 }
 
-                BlockKind::Paragraph {
-                    data: ParagraphData { text },
+                BlockKindMinimal::Paragraph {
+                    data: ParagraphDataMinimal { text },
                 }
             }
 
-            None => BlockKind::from(&current),
+            None => BlockKindMinimal::from(&current),
         };
 
         tracing::debug!("update block: executing query");
@@ -549,11 +471,11 @@ impl DbBlocks for DbBlocksPostgres {
         tracing::debug!("committing database transaction");
         transaction.commit().await?;
 
-        Ok(Block {
+        Ok(BlockMinimal {
             id: *id,
             ts_created: current.get("ts_created"),
             ts_updated: updated.get("ts_updated"),
-            data: BlockData {
+            data: BlockDataMinimal {
                 kind: updated_block_kind,
             },
         })

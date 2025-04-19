@@ -1,4 +1,4 @@
-use crate::db::list_items::{DbListItems, ListItemUpdate};
+use crate::db::list_items::{DbListItems, ListItemDataUpdate};
 use crate::db::Db;
 use crate::global::AppState;
 use crate::{api::handle_options, db::DbError};
@@ -72,7 +72,7 @@ pub async fn get_resource(
 pub async fn patch_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
-    Json(list_item): Json<ListItemUpdate>,
+    Json(list_item): Json<ListItemDataUpdate>,
 ) -> impl IntoResponse {
     let mut db_list_items = match state.db().list_items().await {
         Ok(db) => db,

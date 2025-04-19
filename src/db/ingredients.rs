@@ -5,92 +5,41 @@ use deadpool_postgres::Manager;
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Row;
 use uuid::Uuid;
+use variants::variants;
 
 use super::DbError;
 
 #[trait_variant::make(Send)]
 pub trait DbIngredients {
-    async fn get(&mut self, collection_id: &Uuid) -> Result<Vec<IngredientSummary>>;
+    async fn get(&mut self, collection_id: &Uuid) -> Result<Vec<Ingredient>>;
     async fn get_by_id(&mut self, collection_id: &Uuid, id: &Uuid) -> Result<Ingredient>;
     async fn create(
         &mut self,
         collection_id: &Uuid,
-        ingredients: &Vec<IngredientNew>,
+        ingredients: &Vec<IngredientDataNew>,
     ) -> Result<Vec<IngredientMinimal>>;
     async fn update(
         &mut self,
         id: &Uuid,
         collection_id: &Uuid,
-        ingredient: &IngredientUpdate,
+        ingredient: &IngredientDataUpdate,
     ) -> Result<IngredientMinimal>;
     async fn delete(&mut self, collection_id: &Uuid, id: &Uuid) -> Result<()>;
 }
 
-#[derive(Serialize)]
-pub struct IngredientSummary {
-    pub id: Uuid,
-    pub ts_created: DateTime<Utc>,
-    pub ts_updated: Option<DateTime<Utc>>,
-    pub data: IngredientSummaryData,
-}
-
-impl From<&Row> for IngredientSummary {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("id"),
-            ts_created: row.get("ts_created"),
-            ts_updated: row.get("ts_updated"),
-            data: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct IngredientSummaryData {
-    product: ProductSummary,
-}
-
-impl From<&Row> for IngredientSummaryData {
-    fn from(row: &Row) -> Self {
-        Self {
-            product: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct ProductSummary {
-    id: Uuid,
-    data: ProductSummaryData,
-}
-
-impl From<&Row> for ProductSummary {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("product_id"),
-            data: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct ProductSummaryData {
-    name: String,
-}
-
-impl From<&Row> for ProductSummaryData {
-    fn from(row: &Row) -> Self {
-        Self {
-            name: row.get("product_name"),
-        }
-    }
-}
-
+#[variants(Minimal)]
 #[derive(Serialize)]
 pub struct Ingredient {
+    #[variants(include(Minimal))]
     pub id: Uuid,
+
+    #[variants(include(Minimal))]
     pub ts_created: DateTime<Utc>,
+
+    #[variants(include(Minimal))]
     pub ts_updated: Option<DateTime<Utc>>,
+
+    #[variants(include(Minimal), retype = "{t}{v}")]
     pub data: IngredientData,
 }
 
@@ -105,8 +54,11 @@ impl From<&Row> for Ingredient {
     }
 }
 
-#[derive(Serialize)]
+#[variants(Minimal, New, Update)]
+#[derive(Serialize, Deserialize)]
 pub struct IngredientData {
+    #[variants(include(Minimal, New), retype = "{t}{v}")]
+    #[variants(include(Update), retype = "Option<{t}{v}>")]
     product: Product,
 }
 
@@ -118,8 +70,11 @@ impl From<&Row> for IngredientData {
     }
 }
 
-#[derive(Serialize)]
+#[variants(Minimal, New, Update)]
+#[derive(Serialize, Deserialize)]
 pub struct Product {
+    #[variants(include(Minimal, New))]
+    #[variants(include(Update), retype = "Option<{t}>")]
     id: Uuid,
     data: ProductData,
 }
@@ -133,7 +88,7 @@ impl From<&Row> for Product {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ProductData {
     name: String,
 }
@@ -144,71 +99,6 @@ impl From<&Row> for ProductData {
             name: row.get("product_name"),
         }
     }
-}
-
-#[derive(Serialize)]
-pub struct IngredientMinimal {
-    pub id: Uuid,
-    pub ts_created: DateTime<Utc>,
-    pub ts_updated: Option<DateTime<Utc>>,
-    pub data: IngredientMinimalData,
-}
-
-impl From<&Row> for IngredientMinimal {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("id"),
-            ts_created: row.get("ts_created"),
-            ts_updated: row.get("ts_updated"),
-            data: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct IngredientMinimalData {
-    product: ProductMinimal,
-}
-
-impl From<&Row> for IngredientMinimalData {
-    fn from(row: &Row) -> Self {
-        Self {
-            product: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct ProductMinimal {
-    id: Uuid,
-}
-
-impl From<&Row> for ProductMinimal {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("product_id"),
-        }
-    }
-}
-
-#[derive(Deserialize)]
-pub struct IngredientNew {
-    product: ProductNew,
-}
-
-#[derive(Deserialize)]
-pub struct ProductNew {
-    id: Uuid,
-}
-
-#[derive(Deserialize)]
-pub struct IngredientUpdate {
-    product: Option<ProductUpdate>,
-}
-
-#[derive(Deserialize)]
-pub struct ProductUpdate {
-    id: Option<Uuid>,
 }
 
 pub struct DbIngredientsPostgres {
@@ -222,7 +112,7 @@ impl DbIngredientsPostgres {
 }
 
 impl DbIngredients for DbIngredientsPostgres {
-    async fn get(&mut self, collection_id: &Uuid) -> Result<Vec<IngredientSummary>> {
+    async fn get(&mut self, collection_id: &Uuid) -> Result<Vec<Ingredient>> {
         tracing::debug!("preparing cached statement");
         let stmt = self
             .connection
@@ -302,7 +192,7 @@ impl DbIngredients for DbIngredientsPostgres {
     async fn create(
         &mut self,
         collection_id: &Uuid,
-        ingredients: &Vec<IngredientNew>,
+        ingredients: &Vec<IngredientDataNew>,
     ) -> Result<Vec<IngredientMinimal>> {
         tracing::debug!("starting database transaction");
         let transaction = self.connection.transaction().await?;
@@ -340,7 +230,7 @@ impl DbIngredients for DbIngredientsPostgres {
                 id: ingredient_id,
                 ts_created: row.get("ts_created"),
                 ts_updated: None,
-                data: IngredientMinimalData {
+                data: IngredientDataMinimal {
                     product: ProductMinimal {
                         id: ingredient.product.id,
                     },
@@ -358,7 +248,7 @@ impl DbIngredients for DbIngredientsPostgres {
         &mut self,
         collection_id: &Uuid,
         id: &Uuid,
-        ingredient: &IngredientUpdate,
+        ingredient: &IngredientDataUpdate,
     ) -> Result<IngredientMinimal> {
         tracing::debug!("starting database transaction");
         let transaction = self.connection.transaction().await?;
@@ -422,7 +312,7 @@ impl DbIngredients for DbIngredientsPostgres {
             id: *id,
             ts_created: current.get("ts_created"),
             ts_updated: updated.get("ts_updated"),
-            data: IngredientMinimalData {
+            data: IngredientDataMinimal {
                 product: ProductMinimal { id: product_id },
             },
         })

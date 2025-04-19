@@ -1,4 +1,4 @@
-use crate::db::blocks::{Block, BlockNew, BlockSummary, DbBlocks};
+use crate::db::blocks::{BlockDataNew, BlockMinimal, DbBlocks};
 use crate::global::AppState;
 use crate::{api::handle_options, db::Db};
 
@@ -38,7 +38,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
 #[derive(Serialize)]
 struct GetResponse {
-    data: Vec<BlockSummary>,
+    data: Vec<BlockMinimal>,
 }
 
 #[axum::debug_handler]
@@ -65,12 +65,12 @@ pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResp
 
 #[derive(Deserialize)]
 struct PostRequest {
-    data: Vec<BlockNew>,
+    data: Vec<BlockDataNew>,
 }
 
 #[derive(Serialize)]
 struct PostResponse {
-    data: Vec<Block>,
+    data: Vec<BlockMinimal>,
 }
 
 #[axum::debug_handler]

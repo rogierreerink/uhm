@@ -1,4 +1,4 @@
-use crate::db::ingredients::{DbIngredients, IngredientMinimal, IngredientNew, IngredientSummary};
+use crate::db::ingredients::{DbIngredients, Ingredient, IngredientDataNew, IngredientMinimal};
 use crate::global::AppState;
 use crate::{api::handle_options, db::Db};
 
@@ -40,7 +40,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
 #[derive(Serialize)]
 struct GetResponse {
-    data: Vec<IngredientSummary>,
+    data: Vec<Ingredient>,
 }
 
 #[axum::debug_handler]
@@ -70,7 +70,7 @@ pub async fn get_ingredients(
 
 #[derive(Deserialize)]
 struct PostRequest {
-    data: Vec<IngredientNew>,
+    data: Vec<IngredientDataNew>,
 }
 
 #[derive(Serialize)]

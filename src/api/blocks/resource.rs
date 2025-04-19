@@ -1,4 +1,4 @@
-use crate::db::blocks::{BlockUpdate, DbBlocks};
+use crate::db::blocks::{BlockDataUpdate, DbBlocks};
 use crate::db::Db;
 use crate::global::AppState;
 use crate::{api::handle_options, db::DbError};
@@ -72,7 +72,7 @@ pub async fn get_resource(
 pub async fn patch_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
-    Json(block): Json<BlockUpdate>,
+    Json(block): Json<BlockDataUpdate>,
 ) -> impl IntoResponse {
     let mut db_blocks = match state.db().blocks().await {
         Ok(db) => db,
