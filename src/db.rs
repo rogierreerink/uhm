@@ -20,7 +20,7 @@ pub trait Db {
         &self,
     ) -> Result<impl ingredient_collections::DbIngredientCollections>;
     async fn ingredients(&self) -> Result<impl ingredients::DbIngredients>;
-    async fn list_items(&self) -> Result<impl list_items::DbListItems>;
+    async fn list_items(&self) -> Result<impl list_items::ListItemDb>;
     async fn paragraphs(&self) -> Result<impl paragraphs::ParagraphDb>;
     async fn products(&self) -> Result<impl products::ProductDb>;
 }
@@ -61,10 +61,8 @@ impl Db for DbPostgres {
         ))
     }
 
-    async fn list_items(&self) -> Result<impl list_items::DbListItems> {
-        Ok(list_items::DbListItemsPostgres::new(
-            self.get_connection().await?,
-        ))
+    async fn list_items(&self) -> Result<impl list_items::ListItemDb> {
+        Ok(list_items::ListItemDbPostgres::new(&self.sqlx))
     }
 
     async fn paragraphs(&self) -> Result<impl paragraphs::ParagraphDb> {
@@ -81,6 +79,7 @@ pub enum DbError {
     NotFound,
     TooMany,
     InvalidOperation,
+    InvalidContent,
 }
 
 impl Display for DbError {
@@ -89,6 +88,7 @@ impl Display for DbError {
             DbError::NotFound => write!(f, "resource could not be found"),
             DbError::TooMany => write!(f, "query returned too many results"),
             DbError::InvalidOperation => write!(f, "operation may not be performed"),
+            DbError::InvalidContent => write!(f, "invalid database contents"),
         }
     }
 }

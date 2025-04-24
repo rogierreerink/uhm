@@ -33,7 +33,7 @@ impl Modifier for Update {
     type Data<T> = Option<T>;
 }
 
-#[derive(Default, Debug, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Reference;
 
 impl Modifier for Reference {

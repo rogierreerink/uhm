@@ -1,7 +1,7 @@
-use crate::db::list_items::{DbListItems, ListItemDataUpdate};
-use crate::db::Db;
+use crate::api::handle_options;
+use crate::db::list_items::{ListItemDb, ListItemUpdate};
+use crate::db::{Db, DbError};
 use crate::global::AppState;
-use crate::{api::handle_options, db::DbError};
 
 use axum::{
     extract::{Path, State},
@@ -42,7 +42,7 @@ pub async fn get_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let mut db_list_items = match state.db().list_items().await {
+    let mut db = match state.db().list_items().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -50,31 +50,31 @@ pub async fn get_resource(
         }
     };
 
-    let list_item = match db_list_items.get_by_id(&id).await {
-        Ok(list_item) => list_item,
+    let item = match db.get_by_id(&id).await {
+        Ok(block) => block,
         Err(err) => match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
-                tracing::error!("list item could not be found: {:?}", err);
+                tracing::error!("item could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to get list item: {:?}", err);
+                tracing::error!("failed to get item: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         },
     };
 
-    Ok((StatusCode::OK, Json(list_item)))
+    Ok((StatusCode::OK, Json(item)))
 }
 
 #[axum::debug_handler]
-#[instrument(skip(state, list_item))]
+#[instrument(skip(state, payload))]
 pub async fn patch_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
-    Json(list_item): Json<ListItemDataUpdate>,
+    Json(payload): Json<ListItemUpdate>,
 ) -> impl IntoResponse {
-    let mut db_list_items = match state.db().list_items().await {
+    let mut db = match state.db().list_items().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -82,21 +82,21 @@ pub async fn patch_resource(
         }
     };
 
-    let list_item = match db_list_items.update(&id, &list_item).await {
-        Ok(list_items) => list_items,
+    let updated = match db.update_by_id(&id, payload).await {
+        Ok(updated) => updated,
         Err(err) => match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
-                tracing::error!("list item could not be found: {:?}", err);
+                tracing::error!("item could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to update list item: {:?}", err);
+                tracing::error!("failed to update item: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         },
     };
 
-    Ok((StatusCode::OK, Json(list_item)))
+    Ok((StatusCode::OK, Json(updated)))
 }
 
 #[axum::debug_handler]
@@ -105,7 +105,7 @@ pub async fn delete_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let mut db_list_items = match state.db().list_items().await {
+    let mut db = match state.db().list_items().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -113,14 +113,14 @@ pub async fn delete_resource(
         }
     };
 
-    if let Err(err) = db_list_items.delete(&id).await {
+    if let Err(err) = db.delete_by_id(&id).await {
         match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
-                tracing::error!("list item could not be found: {:?}", err);
+                tracing::error!("item could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to delete list item: {:?}", err);
+                tracing::error!("failed to delete item: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }

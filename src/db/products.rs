@@ -143,19 +143,20 @@ impl ProductDb for ProductDbPostgres<'_> {
     async fn delete_by_id(&mut self, id: &Uuid) -> Result<()> {
         let mut conn = self.pool.acquire().await?;
 
-        sqlx::query(
+        if sqlx::query(
             "
             DELETE FROM public.products
             WHERE id = $1
             ",
         )
         .bind(id)
-        .fetch_one(&mut *conn)
-        .map_err(|error| match error {
-            sqlx::Error::RowNotFound => Into::<anyhow::Error>::into(DbError::NotFound),
-            _ => error.into(),
-        })
-        .await?;
+        .execute(&mut *conn)
+        .await?
+        .rows_affected()
+            == 0
+        {
+            return Err((DbError::NotFound).into());
+        }
 
         Ok(())
     }

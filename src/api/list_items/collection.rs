@@ -1,5 +1,6 @@
-use crate::db::list_items::{DbListItems, ListItem, ListItemDataNew, ListItemMinimal};
+use crate::db::list_items::{ListItemCreate, ListItemDb};
 use crate::global::AppState;
+use crate::utilities::request::collection::{GetResponse, PostRequest, PostResponse};
 use crate::{api::handle_options, db::Db};
 
 use axum::{
@@ -9,7 +10,6 @@ use axum::{
     routing::{get, options, post},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -36,15 +36,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     )
 }
 
-#[derive(Serialize)]
-struct GetResponse {
-    data: Vec<ListItem>,
-}
-
 #[axum::debug_handler]
 #[instrument(skip(state))]
 pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut db_list_items = match state.db().list_items().await {
+    let mut db = match state.db().list_items().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -52,34 +47,24 @@ pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResp
         }
     };
 
-    let list_items = match db_list_items.get().await {
-        Ok(list_items) => list_items,
+    let items = match db.get_multiple().await {
+        Ok(items) => items,
         Err(err) => {
-            tracing::error!("failed to get list items: {:?}", err);
+            tracing::error!("failed to get items: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
-    Ok((StatusCode::OK, Json(GetResponse { data: list_items })))
-}
-
-#[derive(Deserialize)]
-struct PostRequest {
-    data: Vec<ListItemDataNew>,
-}
-
-#[derive(Serialize)]
-struct PostResponse {
-    data: Vec<ListItemMinimal>,
+    Ok((StatusCode::OK, Json(GetResponse { data: items })))
 }
 
 #[axum::debug_handler]
-#[instrument(skip(state, list_item))]
+#[instrument(skip(state, payload))]
 pub async fn post_collection(
     State(state): State<Arc<AppState>>,
-    Json(list_item): Json<PostRequest>,
+    Json(payload): Json<PostRequest<ListItemCreate>>,
 ) -> impl IntoResponse {
-    let mut db_list_items = match state.db().list_items().await {
+    let mut db = match state.db().list_items().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -87,13 +72,13 @@ pub async fn post_collection(
         }
     };
 
-    let list_items = match db_list_items.create(&list_item.data).await {
-        Ok(list_items) => list_items,
+    let created = match db.create_multiple(payload.data).await {
+        Ok(created) => created,
         Err(err) => {
-            tracing::error!("failed to create list items: {:?}", err);
+            tracing::error!("failed to create items: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
-    Ok((StatusCode::CREATED, Json(PostResponse { data: list_items })))
+    Ok((StatusCode::CREATED, Json(PostResponse { data: created })))
 }
