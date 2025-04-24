@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.97", features = ["backtrace"] }
+async-stream = "0.3.6"
 axum = { version = "0.7.7", features = ["macros", "original-uri", "ws"] }
 chrono = { version = "0.4.40", features = ["serde"] }
 deadpool = { version = "0.12.1", features = ["rt_tokio_1"] }
@@ -12,11 +13,13 @@ deadpool-postgres = "0.14.0"
 futures-util = { version = "0.3.31", features = ["channel"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.132"
+sqlx = { version = "0.8.5", features = ["chrono", "postgres", "runtime-tokio", "uuid"] }
 tokio = { version = "1.41.1", features = ["full", "sync"] }
 tokio-postgres = { version = "0.7.12", features = [
     "with-chrono-0_4",
     "with-uuid-1",
 ] }
+tokio-stream = "0.1.17"
 tower = "0.5.1"
 tower-http = { version = "0.6.1", features = ["set-header"] }
 tracing = "0.1.40"

@@ -6,11 +6,13 @@ use std::sync::Arc;
 mod blocks;
 mod ingredient_collections;
 mod list_items;
+mod paragraphs;
 mod products;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
         .nest("/blocks", blocks::create_router(state.clone()))
+        .nest("/paragraphs", paragraphs::create_router(state.clone()))
         .nest("/products", products::create_router(state.clone()))
         .nest("/list-items", list_items::create_router(state.clone()))
         .nest(

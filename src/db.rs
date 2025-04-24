@@ -4,16 +4,19 @@ use std::fmt::{Debug, Display};
 use anyhow::Result;
 use deadpool::managed::{Object, Pool};
 use deadpool_postgres::Manager;
+use sqlx::PgPool;
 
 pub mod blocks;
 pub mod ingredient_collections;
 pub mod ingredients;
 pub mod list_items;
+pub mod paragraphs;
 pub mod products;
 
 #[trait_variant::make(Send)]
 pub trait Db {
     async fn blocks(&self) -> Result<impl blocks::DbBlocks>;
+    async fn paragraphs(&self) -> Result<impl paragraphs::ParagraphDb>;
     async fn ingredient_collections(
         &self,
     ) -> Result<impl ingredient_collections::DbIngredientCollections>;
@@ -24,11 +27,12 @@ pub trait Db {
 
 pub struct DbPostgres {
     pool: Pool<Manager>,
+    sqlx: sqlx::PgPool,
 }
 
 impl DbPostgres {
-    pub fn new(pool: Pool<Manager>) -> Self {
-        Self { pool }
+    pub fn new(pool: Pool<Manager>, sqlx: PgPool) -> Self {
+        Self { pool, sqlx }
     }
 
     async fn get_connection(&self) -> Result<Object<Manager>> {
@@ -40,6 +44,10 @@ impl DbPostgres {
 impl Db for DbPostgres {
     async fn blocks(&self) -> Result<impl blocks::DbBlocks> {
         Ok(blocks::DbBlocksPostgres::new(self.get_connection().await?))
+    }
+
+    async fn paragraphs(&self) -> Result<impl paragraphs::ParagraphDb> {
+        Ok(paragraphs::ParagraphDbPostgres::new(&self.sqlx))
     }
 
     async fn ingredient_collections(
