@@ -1,13 +1,13 @@
 DO $$ BEGIN
 
-    -- Table: paragraphs
+    -- Table: products
 
-    CREATE TABLE IF NOT EXISTS public.paragraphs ();
+    CREATE TABLE IF NOT EXISTS public.products ();
 
-    ALTER TABLE public.paragraphs
+    ALTER TABLE public.products
         ADD IF NOT EXISTS id UUID NOT NULL PRIMARY KEY,
         ADD IF NOT EXISTS ts_created TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
         ADD IF NOT EXISTS ts_updated TIMESTAMP WITH TIME ZONE,
-        ADD IF NOT EXISTS text TEXT;
+        ADD IF NOT EXISTS name VARCHAR(256) NOT NULL;
 
 END $$

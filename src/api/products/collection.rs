@@ -1,8 +1,8 @@
-use crate::db::products::{DbProducts, Product, ProductDataNew, ProductMinimal, QueryParams};
+use crate::db::products::{ProductCreate, ProductDb};
 use crate::global::AppState;
+use crate::utilities::request::collection::{GetResponse, PostRequest, PostResponse};
 use crate::{api::handle_options, db::Db};
 
-use axum::extract::Query;
 use axum::{
     extract::State,
     http::{header, HeaderValue, StatusCode},
@@ -10,7 +10,6 @@ use axum::{
     routing::{get, options, post},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -37,18 +36,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     )
 }
 
-#[derive(Serialize)]
-struct GetResponse {
-    data: Vec<Product>,
-}
-
 #[axum::debug_handler]
 #[instrument(skip(state))]
-pub async fn get_collection(
-    State(state): State<Arc<AppState>>,
-    Query(search_query): Query<QueryParams>,
-) -> impl IntoResponse {
-    let mut db_products = match state.db().products().await {
+pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let mut db = match state.db().products().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -56,34 +47,24 @@ pub async fn get_collection(
         }
     };
 
-    let products = match db_products.get(&search_query).await {
-        Ok(products) => products,
+    let items = match db.get_multiple().await {
+        Ok(items) => items,
         Err(err) => {
-            tracing::error!("failed to get products: {:?}", err);
+            tracing::error!("failed to get items: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
-    Ok((StatusCode::OK, Json(GetResponse { data: products })))
-}
-
-#[derive(Deserialize)]
-struct PostRequest {
-    data: Vec<ProductDataNew>,
-}
-
-#[derive(Serialize)]
-struct PostResponse {
-    data: Vec<ProductMinimal>,
+    Ok((StatusCode::OK, Json(GetResponse { data: items })))
 }
 
 #[axum::debug_handler]
-#[instrument(skip(state, product))]
+#[instrument(skip(state, payload))]
 pub async fn post_collection(
     State(state): State<Arc<AppState>>,
-    Json(product): Json<PostRequest>,
+    Json(payload): Json<PostRequest<ProductCreate>>,
 ) -> impl IntoResponse {
-    let mut db_products = match state.db().products().await {
+    let mut db = match state.db().products().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -91,13 +72,13 @@ pub async fn post_collection(
         }
     };
 
-    let products = match db_products.create(&product.data).await {
-        Ok(products) => products,
+    let created = match db.create_multiple(payload.data).await {
+        Ok(created) => created,
         Err(err) => {
-            tracing::error!("failed to create products: {:?}", err);
+            tracing::error!("failed to create items: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
-    Ok((StatusCode::CREATED, Json(PostResponse { data: products })))
+    Ok((StatusCode::CREATED, Json(PostResponse { data: created })))
 }

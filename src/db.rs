@@ -16,13 +16,13 @@ pub mod products;
 #[trait_variant::make(Send)]
 pub trait Db {
     async fn blocks(&self) -> Result<impl blocks::DbBlocks>;
-    async fn paragraphs(&self) -> Result<impl paragraphs::ParagraphDb>;
     async fn ingredient_collections(
         &self,
     ) -> Result<impl ingredient_collections::DbIngredientCollections>;
     async fn ingredients(&self) -> Result<impl ingredients::DbIngredients>;
     async fn list_items(&self) -> Result<impl list_items::DbListItems>;
-    async fn products(&self) -> Result<impl products::DbProducts>;
+    async fn paragraphs(&self) -> Result<impl paragraphs::ParagraphDb>;
+    async fn products(&self) -> Result<impl products::ProductDb>;
 }
 
 pub struct DbPostgres {
@@ -45,11 +45,6 @@ impl Db for DbPostgres {
     async fn blocks(&self) -> Result<impl blocks::DbBlocks> {
         Ok(blocks::DbBlocksPostgres::new(self.get_connection().await?))
     }
-
-    async fn paragraphs(&self) -> Result<impl paragraphs::ParagraphDb> {
-        Ok(paragraphs::ParagraphDbPostgres::new(&self.sqlx))
-    }
-
     async fn ingredient_collections(
         &self,
     ) -> Result<impl ingredient_collections::DbIngredientCollections> {
@@ -72,10 +67,12 @@ impl Db for DbPostgres {
         ))
     }
 
-    async fn products(&self) -> Result<impl products::DbProducts> {
-        Ok(products::DbProductsPostgres::new(
-            self.get_connection().await?,
-        ))
+    async fn paragraphs(&self) -> Result<impl paragraphs::ParagraphDb> {
+        Ok(paragraphs::ParagraphDbPostgres::new(&self.sqlx))
+    }
+
+    async fn products(&self) -> Result<impl products::ProductDb> {
+        Ok(products::ProductDbPostgres::new(&self.sqlx))
     }
 }
 
