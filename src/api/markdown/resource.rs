@@ -1,5 +1,5 @@
 use crate::api::handle_options;
-use crate::db::paragraphs::{ParagraphDb, ParagraphUpdate};
+use crate::db::markdown::{MarkdownDb, MarkdownUpdate};
 use crate::db::{Db, DbError};
 use crate::global::AppState;
 
@@ -42,7 +42,7 @@ pub async fn get_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().paragraphs().await {
+    let mut db = match state.db().markdown().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -72,9 +72,9 @@ pub async fn get_resource(
 pub async fn patch_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
-    Json(payload): Json<ParagraphUpdate>,
+    Json(payload): Json<MarkdownUpdate>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().paragraphs().await {
+    let mut db = match state.db().markdown().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -105,7 +105,7 @@ pub async fn delete_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().paragraphs().await {
+    let mut db = match state.db().markdown().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);

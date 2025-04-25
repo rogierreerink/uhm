@@ -10,66 +10,66 @@ use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
 use super::DbError;
 
 #[trait_variant::make(Send)]
-pub trait ParagraphDb {
-    async fn get_multiple(&mut self) -> Result<Vec<Paragraph>>;
-    async fn get_by_id(&mut self, id: &Uuid) -> Result<Paragraph>;
-    async fn create_multiple(&mut self, items: Vec<ParagraphCreate>) -> Result<Vec<Paragraph>>;
-    async fn update_by_id(&mut self, id: &Uuid, item: ParagraphUpdate) -> Result<Paragraph>;
+pub trait MarkdownDb {
+    async fn get_multiple(&mut self) -> Result<Vec<Markdown>>;
+    async fn get_by_id(&mut self, id: &Uuid) -> Result<Markdown>;
+    async fn create_multiple(&mut self, items: Vec<MarkdownCreate>) -> Result<Vec<Markdown>>;
+    async fn update_by_id(&mut self, id: &Uuid, item: MarkdownUpdate) -> Result<Markdown>;
     async fn delete_by_id(&mut self, id: &Uuid) -> Result<()>;
 }
 
-pub type Paragraph = ParagraphTemplate<Query>;
-pub type ParagraphCreate = ParagraphDataTemplate<Create>;
-pub type ParagraphUpdate = ParagraphDataTemplate<Update>;
-pub type ParagraphReference = ParagraphTemplate<Reference>;
+pub type Markdown = MarkdownTemplate<Query>;
+pub type MarkdownCreate = MarkdownDataTemplate<Create>;
+pub type MarkdownUpdate = MarkdownDataTemplate<Update>;
+pub type MarkdownReference = MarkdownTemplate<Reference>;
 
 #[derive(Default, Debug, Serialize, Deserialize)]
-pub struct ParagraphTemplate<M: Modifier> {
+pub struct MarkdownTemplate<M: Modifier> {
     pub id: M::Key<Uuid>,
     #[serde(skip_serializing_if = "M::skip_meta")]
     pub ts_created: M::Meta<DateTime<Utc>>,
     #[serde(skip_serializing_if = "M::skip_meta")]
     pub ts_updated: M::Meta<Option<DateTime<Utc>>>,
     #[serde(skip_serializing_if = "M::skip_data")]
-    pub data: M::Data<ParagraphDataTemplate<M>>,
+    pub data: M::Data<MarkdownDataTemplate<M>>,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
-pub struct ParagraphDataTemplate<M: Modifier> {
-    pub text: M::Data<String>,
+pub struct MarkdownDataTemplate<M: Modifier> {
+    pub markdown: M::Data<String>,
 }
 
-impl FromRow<'_, PgRow> for Paragraph {
+impl FromRow<'_, PgRow> for Markdown {
     fn from_row(row: &'_ PgRow) -> std::result::Result<Self, sqlx::Error> {
         Ok(Self {
             id: row.get("id"),
             ts_created: row.get("ts_created"),
             ts_updated: row.get("ts_updated"),
-            data: ParagraphDataTemplate::<Query> {
-                text: row.get("text"),
+            data: MarkdownDataTemplate::<Query> {
+                markdown: row.get("markdown"),
             },
         })
     }
 }
 
-pub struct ParagraphDbPostgres<'a> {
+pub struct MarkdownDbPostgres<'a> {
     pool: &'a PgPool,
 }
 
-impl<'a> ParagraphDbPostgres<'a> {
+impl<'a> MarkdownDbPostgres<'a> {
     pub fn new(pool: &'a PgPool) -> Self {
         Self { pool }
     }
 }
 
-impl ParagraphDb for ParagraphDbPostgres<'_> {
-    async fn get_multiple(&mut self) -> Result<Vec<Paragraph>> {
+impl MarkdownDb for MarkdownDbPostgres<'_> {
+    async fn get_multiple(&mut self) -> Result<Vec<Markdown>> {
         let mut conn = self.pool.acquire().await?;
 
         sqlx::query_as(
             "
-            SELECT id, ts_created, ts_updated, text
-            FROM public.paragraphs
+            SELECT id, ts_created, ts_updated, markdown
+            FROM public.markdown
             ",
         )
         .fetch(&mut *conn)
@@ -78,26 +78,26 @@ impl ParagraphDb for ParagraphDbPostgres<'_> {
         .await
     }
 
-    async fn get_by_id(&mut self, id: &Uuid) -> Result<Paragraph> {
+    async fn get_by_id(&mut self, id: &Uuid) -> Result<Markdown> {
         let mut conn = self.pool.acquire().await?;
 
         Self::get_by_id(&mut *conn, id).await
     }
 
-    async fn create_multiple(&mut self, items: Vec<ParagraphCreate>) -> Result<Vec<Paragraph>> {
+    async fn create_multiple(&mut self, items: Vec<MarkdownCreate>) -> Result<Vec<Markdown>> {
         let mut tx = self.pool.begin().await?;
         let mut created = Vec::new();
 
         for item in items {
             match sqlx::query_as(
                 "
-                INSERT INTO public.paragraphs (id, text)
+                INSERT INTO public.markdown (id, markdown)
                 VALUES ($1, $2)
-                RETURNING id, ts_created, ts_updated, text
+                RETURNING id, ts_created, ts_updated, markdown
                 ",
             )
             .bind(Uuid::new_v4())
-            .bind(item.text)
+            .bind(item.markdown)
             .fetch_one(&mut *tx)
             .await
             {
@@ -114,7 +114,7 @@ impl ParagraphDb for ParagraphDbPostgres<'_> {
         Ok(created)
     }
 
-    async fn update_by_id(&mut self, id: &Uuid, item: ParagraphUpdate) -> Result<Paragraph> {
+    async fn update_by_id(&mut self, id: &Uuid, item: MarkdownUpdate) -> Result<Markdown> {
         let mut tx = self.pool.begin().await?;
 
         let updated = match Self::update_by_id(&mut tx, id, item).await {
@@ -135,7 +135,7 @@ impl ParagraphDb for ParagraphDbPostgres<'_> {
 
         if sqlx::query(
             "
-            DELETE FROM public.paragraphs
+            DELETE FROM public.markdown
             WHERE id = $1
             ",
         )
@@ -152,15 +152,15 @@ impl ParagraphDb for ParagraphDbPostgres<'_> {
     }
 }
 
-impl ParagraphDbPostgres<'_> {
-    async fn get_by_id<'c, E>(executor: E, id: &Uuid) -> Result<Paragraph>
+impl MarkdownDbPostgres<'_> {
+    async fn get_by_id<'c, E>(executor: E, id: &Uuid) -> Result<Markdown>
     where
         E: PgExecutor<'c>,
     {
         sqlx::query_as(
             "
-            SELECT id, ts_created, ts_updated, text
-            FROM public.paragraphs
+            SELECT id, ts_created, ts_updated, markdown
+            FROM public.markdown
             WHERE id = $1
             ",
         )
@@ -176,20 +176,20 @@ impl ParagraphDbPostgres<'_> {
     async fn update_by_id(
         tx: &mut PgTransaction<'_>,
         id: &Uuid,
-        item: ParagraphUpdate,
-    ) -> Result<Paragraph> {
+        item: MarkdownUpdate,
+    ) -> Result<Markdown> {
         let current = Self::get_by_id(&mut **tx, id).await?;
         let updated = sqlx::query_as(
             "
-            UPDATE public.paragraphs
-            SET text = $2,
+            UPDATE public.markdown
+            SET markdown = $2,
                 ts_updated = NOW()
             WHERE id = $1
-            RETURNING id, ts_created, ts_updated, text
+            RETURNING id, ts_created, ts_updated, markdown
             ",
         )
         .bind(id)
-        .bind(item.text.unwrap_or(current.data.text))
+        .bind(item.markdown.unwrap_or(current.data.markdown))
         .fetch_one(&mut **tx)
         .await?;
 

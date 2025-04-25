@@ -10,7 +10,7 @@ pub mod blocks;
 pub mod ingredient_collections;
 pub mod ingredients;
 pub mod list_items;
-pub mod paragraphs;
+pub mod markdown;
 pub mod products;
 
 #[trait_variant::make(Send)]
@@ -21,7 +21,7 @@ pub trait Db {
     ) -> Result<impl ingredient_collections::IngredientCollectionDb>;
     async fn ingredients(&self) -> Result<impl ingredients::IngredientDb>;
     async fn list_items(&self) -> Result<impl list_items::ListItemDb>;
-    async fn paragraphs(&self) -> Result<impl paragraphs::ParagraphDb>;
+    async fn markdown(&self) -> Result<impl markdown::MarkdownDb>;
     async fn products(&self) -> Result<impl products::ProductDb>;
 }
 
@@ -62,8 +62,8 @@ impl Db for DbPostgres {
         Ok(list_items::ListItemDbPostgres::new(&self.sqlx))
     }
 
-    async fn paragraphs(&self) -> Result<impl paragraphs::ParagraphDb> {
-        Ok(paragraphs::ParagraphDbPostgres::new(&self.sqlx))
+    async fn markdown(&self) -> Result<impl markdown::MarkdownDb> {
+        Ok(markdown::MarkdownDbPostgres::new(&self.sqlx))
     }
 
     async fn products(&self) -> Result<impl products::ProductDb> {

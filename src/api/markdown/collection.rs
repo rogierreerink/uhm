@@ -1,4 +1,4 @@
-use crate::db::paragraphs::{ParagraphCreate, ParagraphDb};
+use crate::db::markdown::{MarkdownCreate, MarkdownDb};
 use crate::global::AppState;
 use crate::utilities::request::collection::{GetResponse, PostRequest, PostResponse};
 use crate::{api::handle_options, db::Db};
@@ -39,7 +39,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 #[axum::debug_handler]
 #[instrument(skip(state))]
 pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut db = match state.db().paragraphs().await {
+    let mut db = match state.db().markdown().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -62,9 +62,9 @@ pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResp
 #[instrument(skip(state, payload))]
 pub async fn post_collection(
     State(state): State<Arc<AppState>>,
-    Json(payload): Json<PostRequest<ParagraphCreate>>,
+    Json(payload): Json<PostRequest<MarkdownCreate>>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().paragraphs().await {
+    let mut db = match state.db().markdown().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
