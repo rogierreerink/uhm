@@ -1,5 +1,6 @@
-use crate::db::ingredients::{DbIngredients, Ingredient, IngredientDataNew, IngredientMinimal};
+use crate::db::ingredients::{IngredientCreate, IngredientDb};
 use crate::global::AppState;
+use crate::utilities::request::collection::{GetResponse, PostRequest, PostResponse};
 use crate::{api::handle_options, db::Db};
 
 use axum::extract::Path;
@@ -10,7 +11,6 @@ use axum::{
     routing::{get, options, post},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -20,8 +20,8 @@ use uuid::Uuid;
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new().merge(
         Router::new()
-            .route("/", get(get_ingredients))
-            .route("/", post(post_ingredients))
+            .route("/", get(get_collection))
+            .route("/", post(post_collection))
             .route("/", options(handle_options))
             .layer(
                 ServiceBuilder::new()
@@ -38,18 +38,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     )
 }
 
-#[derive(Serialize)]
-struct GetResponse {
-    data: Vec<Ingredient>,
-}
-
 #[axum::debug_handler]
 #[instrument(skip(state))]
-pub async fn get_ingredients(
+pub async fn get_collection(
     State(state): State<Arc<AppState>>,
     Path(collection_id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let mut db_ingredients = match state.db().ingredients().await {
+    let mut db = match state.db().ingredients().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -57,35 +52,25 @@ pub async fn get_ingredients(
         }
     };
 
-    let ingredients = match db_ingredients.get(&collection_id).await {
-        Ok(ingredients) => ingredients,
+    let items = match db.get_multiple(&collection_id).await {
+        Ok(items) => items,
         Err(err) => {
-            tracing::error!("failed to get ingredients: {:?}", err);
+            tracing::error!("failed to get items: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
-    Ok((StatusCode::OK, Json(GetResponse { data: ingredients })))
-}
-
-#[derive(Deserialize)]
-struct PostRequest {
-    data: Vec<IngredientDataNew>,
-}
-
-#[derive(Serialize)]
-struct PostResponse {
-    data: Vec<IngredientMinimal>,
+    Ok((StatusCode::OK, Json(GetResponse { data: items })))
 }
 
 #[axum::debug_handler]
-#[instrument(skip(state, ingredients))]
-pub async fn post_ingredients(
+#[instrument(skip(state, payload))]
+pub async fn post_collection(
     State(state): State<Arc<AppState>>,
     Path(collection_id): Path<Uuid>,
-    Json(ingredients): Json<PostRequest>,
+    Json(payload): Json<PostRequest<IngredientCreate>>,
 ) -> impl IntoResponse {
-    let mut db_ingredients = match state.db().ingredients().await {
+    let mut db = match state.db().ingredients().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -93,19 +78,13 @@ pub async fn post_ingredients(
         }
     };
 
-    let ingredients = match db_ingredients
-        .create(&collection_id, &ingredients.data)
-        .await
-    {
-        Ok(ingredients) => ingredients,
+    let created = match db.create_multiple(&collection_id, payload.data).await {
+        Ok(created) => created,
         Err(err) => {
-            tracing::error!("failed to create ingredients: {:?}", err);
+            tracing::error!("failed to create items: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
-    Ok((
-        StatusCode::CREATED,
-        Json(PostResponse { data: ingredients }),
-    ))
+    Ok((StatusCode::CREATED, Json(PostResponse { data: created })))
 }

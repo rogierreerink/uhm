@@ -2,7 +2,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use futures_util::{TryFutureExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgRow, prelude::FromRow, PgExecutor, PgPool, Row};
+use sqlx::{postgres::PgRow, prelude::FromRow, PgExecutor, PgPool, PgTransaction, Row};
 use uuid::Uuid;
 
 use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
@@ -89,26 +89,24 @@ impl ParagraphDb for ParagraphDbPostgres<'_> {
         let mut created = Vec::new();
 
         for item in items {
-            created.push(
-                match sqlx::query_as(
-                    "
-                    INSERT INTO public.paragraphs (id, text)
-                    VALUES ($1, $2)
-                    RETURNING id, ts_created, ts_updated, text
-                    ",
-                )
-                .bind(Uuid::new_v4())
-                .bind(item.text)
-                .fetch_one(&mut *tx)
-                .await
-                {
-                    Ok(created) => created,
-                    Err(error) => {
-                        tx.commit().await?;
-                        return Err(error.into());
-                    }
-                },
-            );
+            match sqlx::query_as(
+                "
+                INSERT INTO public.paragraphs (id, text)
+                VALUES ($1, $2)
+                RETURNING id, ts_created, ts_updated, text
+                ",
+            )
+            .bind(Uuid::new_v4())
+            .bind(item.text)
+            .fetch_one(&mut *tx)
+            .await
+            {
+                Ok(item) => created.push(item),
+                Err(error) => {
+                    tx.commit().await?;
+                    return Err(error.into());
+                }
+            };
         }
 
         tx.commit().await?;
@@ -119,24 +117,13 @@ impl ParagraphDb for ParagraphDbPostgres<'_> {
     async fn update_by_id(&mut self, id: &Uuid, item: ParagraphUpdate) -> Result<Paragraph> {
         let mut tx = self.pool.begin().await?;
 
-        let current = Self::get_by_id(&mut *tx, id).await?;
-        let updated = sqlx::query_as(
-            "
-            UPDATE public.paragraphs
-            SET text = $2,
-                ts_updated = NOW()
-            WHERE id = $1
-            RETURNING id, ts_created, ts_updated, text
-            ",
-        )
-        .bind(id)
-        .bind(item.text.unwrap_or(current.data.text))
-        .fetch_one(&mut *tx)
-        .map_err(|error| match error {
-            sqlx::Error::RowNotFound => Into::<anyhow::Error>::into(DbError::NotFound),
-            _ => error.into(),
-        })
-        .await?;
+        let updated = match Self::update_by_id(&mut tx, id, item).await {
+            Ok(item) => item,
+            Err(error) => {
+                tx.commit().await?;
+                return Err(error.into());
+            }
+        };
 
         tx.commit().await?;
 
@@ -184,5 +171,28 @@ impl ParagraphDbPostgres<'_> {
             _ => error.into(),
         })
         .await
+    }
+
+    async fn update_by_id(
+        tx: &mut PgTransaction<'_>,
+        id: &Uuid,
+        item: ParagraphUpdate,
+    ) -> Result<Paragraph> {
+        let current = Self::get_by_id(&mut **tx, id).await?;
+        let updated = sqlx::query_as(
+            "
+            UPDATE public.paragraphs
+            SET text = $2,
+                ts_updated = NOW()
+            WHERE id = $1
+            RETURNING id, ts_created, ts_updated, text
+            ",
+        )
+        .bind(id)
+        .bind(item.text.unwrap_or(current.data.text))
+        .fetch_one(&mut **tx)
+        .await?;
+
+        Ok(updated)
     }
 }

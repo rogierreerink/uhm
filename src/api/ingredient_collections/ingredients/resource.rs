@@ -1,7 +1,7 @@
-use crate::db::ingredients::{DbIngredients, IngredientDataUpdate};
-use crate::db::Db;
+use crate::api::handle_options;
+use crate::db::ingredients::{IngredientDb, IngredientUpdate};
+use crate::db::{Db, DbError};
 use crate::global::AppState;
-use crate::{api::handle_options, db::DbError};
 
 use axum::{
     extract::{Path, State},
@@ -42,7 +42,7 @@ pub async fn get_resource(
     State(state): State<Arc<AppState>>,
     Path((collection_id, id)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
-    let mut db_ingredients = match state.db().ingredients().await {
+    let mut db = match state.db().ingredients().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -50,31 +50,31 @@ pub async fn get_resource(
         }
     };
 
-    let ingredient = match db_ingredients.get_by_id(&collection_id, &id).await {
-        Ok(ingredient) => ingredient,
+    let item = match db.get_by_id(&collection_id, &id).await {
+        Ok(block) => block,
         Err(err) => match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
-                tracing::error!("ingredient could not be found: {:?}", err);
+                tracing::error!("item could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to get ingredient: {:?}", err);
+                tracing::error!("failed to get item: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         },
     };
 
-    Ok((StatusCode::OK, Json(ingredient)))
+    Ok((StatusCode::OK, Json(item)))
 }
 
 #[axum::debug_handler]
-#[instrument(skip(state, ingredient))]
+#[instrument(skip(state, payload))]
 pub async fn patch_resource(
     State(state): State<Arc<AppState>>,
     Path((collection_id, id)): Path<(Uuid, Uuid)>,
-    Json(ingredient): Json<IngredientDataUpdate>,
+    Json(payload): Json<IngredientUpdate>,
 ) -> impl IntoResponse {
-    let mut db_ingredients = match state.db().ingredients().await {
+    let mut db = match state.db().ingredients().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -82,24 +82,21 @@ pub async fn patch_resource(
         }
     };
 
-    let ingredient = match db_ingredients
-        .update(&collection_id, &id, &ingredient)
-        .await
-    {
-        Ok(ingredient) => ingredient,
+    let updated = match db.update_by_id(&collection_id, &id, payload).await {
+        Ok(updated) => updated,
         Err(err) => match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
-                tracing::error!("ingredient could not be found: {:?}", err);
+                tracing::error!("item could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to update ingredient: {:?}", err);
+                tracing::error!("failed to update item: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         },
     };
 
-    Ok((StatusCode::OK, Json(ingredient)))
+    Ok((StatusCode::OK, Json(updated)))
 }
 
 #[axum::debug_handler]
@@ -108,7 +105,7 @@ pub async fn delete_resource(
     State(state): State<Arc<AppState>>,
     Path((collection_id, id)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
-    let mut db_ingredients = match state.db().ingredients().await {
+    let mut db = match state.db().ingredients().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -116,14 +113,14 @@ pub async fn delete_resource(
         }
     };
 
-    if let Err(err) = db_ingredients.delete(&collection_id, &id).await {
+    if let Err(err) = db.delete_by_id(&collection_id, &id).await {
         match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
-                tracing::error!("ingredient could not be found: {:?}", err);
+                tracing::error!("item could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to delete ingredient: {:?}", err);
+                tracing::error!("failed to delete item: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }
