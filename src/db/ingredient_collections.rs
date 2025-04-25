@@ -1,13 +1,21 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use futures_util::{TryFutureExt, TryStreamExt};
+use futures_util::{Stream, TryFutureExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgRow, prelude::FromRow, PgExecutor, PgPool, PgTransaction, Row};
+use sqlx::{postgres::PgRow, prelude::FromRow, PgPool, PgTransaction, Row};
 use uuid::Uuid;
 
-use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
+use crate::{
+    db::{
+        ingredients::IngredientDataTemplate,
+        products::{ProductDataTemplate, ProductReference},
+    },
+    utilities::modifier::{Create, Modifier, Query, Reference, Update},
+};
 
-use super::DbError;
+use super::{ingredients::IngredientReference, DbError};
 
 #[trait_variant::make(Send)]
 pub trait IngredientCollectionDb {
@@ -44,8 +52,9 @@ pub struct IngredientCollectionTemplate<M: Modifier> {
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct IngredientCollectionDataTemplate<M: Modifier> {
-    #[serde(skip)]
-    pub _phantom_data: M::Data<()>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "M::skip_data")]
+    pub ingredients: M::Data<Vec<IngredientReference>>,
 }
 
 impl FromRow<'_, PgRow> for IngredientCollection {
@@ -54,8 +63,70 @@ impl FromRow<'_, PgRow> for IngredientCollection {
             id: row.get("id"),
             ts_created: row.get("ts_created"),
             ts_updated: row.get("ts_updated"),
-            data: IngredientCollectionDataTemplate::<Query> { _phantom_data: () },
+            data: IngredientCollectionDataTemplate::<Query> {
+                ingredients: Vec::new(),
+            },
         })
+    }
+}
+
+impl FromRow<'_, PgRow> for IngredientReference {
+    fn from_row(row: &'_ PgRow) -> std::result::Result<Self, sqlx::Error> {
+        Ok(IngredientReference {
+            id: row.get("ingredient_id"),
+            data: Some(IngredientDataTemplate {
+                product: Some(ProductReference {
+                    id: row.get("product_id"),
+                    data: Some(ProductDataTemplate {
+                        name: Some(row.get("product_name")),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
+}
+
+impl IngredientCollection {
+    async fn try_item_from_stream(
+        rows: &mut (impl Stream<Item = Result<PgRow, sqlx::Error>> + Unpin),
+    ) -> Result<Option<Self>> {
+        let mut item = Option::None;
+
+        while let Some(row) = rows.try_next().await? {
+            let item = item.get_or_insert(IngredientCollection::from_row(&row)?);
+
+            if let Some(_) = row.get::<Option<Uuid>, _>("ingredient_id") {
+                item.data
+                    .ingredients
+                    .push(IngredientReference::from_row(&row)?);
+            }
+        }
+
+        Ok(item)
+    }
+
+    async fn try_items_from_stream(
+        rows: &mut (impl Stream<Item = Result<PgRow, sqlx::Error>> + Unpin),
+    ) -> Result<Vec<Self>> {
+        let mut items = HashMap::<Uuid, _>::new();
+
+        while let Some(row) = rows.try_next().await? {
+            let item = items
+                .entry(row.get("id"))
+                .or_insert(IngredientCollection::from_row(&row)?);
+
+            if let Some(_) = row.get::<Option<Uuid>, _>("ingredient_id") {
+                item.data
+                    .ingredients
+                    .push(IngredientReference::from_row(&row)?);
+            }
+        }
+
+        Ok(items.into_values().collect())
     }
 }
 
@@ -72,24 +143,58 @@ impl<'a> IngredientCollectionDbPostgres<'a> {
 impl IngredientCollectionDb for IngredientCollectionDbPostgres<'_> {
     async fn get_multiple(&mut self) -> Result<Vec<IngredientCollection>> {
         let mut conn = self.pool.acquire().await?;
-
-        sqlx::query_as(
+        let mut stream = sqlx::query(
             "
-            SELECT id, ts_created, ts_updated
+            SELECT
+                ingredient_collections.id,
+                ingredient_collections.ts_created,
+                ingredient_collections.ts_updated,
+                ingredients.id AS ingredient_id,
+                products.id AS product_id,
+                products.name AS product_name
+
             FROM public.ingredient_collections
-            ORDER BY id
+                LEFT JOIN public.ingredients
+                    ON ingredient_collections.id = ingredients.ingredient_collection_id
+                LEFT JOIN public.products
+                    ON ingredients.product_id = products.id
+
+            ORDER BY ingredient_collections.id
             ",
         )
-        .fetch(&mut *conn)
-        .try_collect()
-        .map_err(|error| error.into())
-        .await
+        .fetch(&mut *conn);
+
+        IngredientCollection::try_items_from_stream(&mut stream).await
     }
 
     async fn get_by_id(&mut self, id: &Uuid) -> Result<IngredientCollection> {
         let mut conn = self.pool.acquire().await?;
+        let mut stream = sqlx::query(
+            "
+            SELECT
+                ingredient_collections.id,
+                ingredient_collections.ts_created,
+                ingredient_collections.ts_updated,
+                ingredients.id AS ingredient_id,
+                products.id AS product_id,
+                products.name AS product_name
 
-        Self::get_by_id(&mut *conn, id).await
+            FROM public.ingredient_collections
+                LEFT JOIN public.ingredients
+                    ON ingredient_collections.id = ingredients.ingredient_collection_id
+                LEFT JOIN public.products
+                    ON ingredients.product_id = products.id
+
+            WHERE ingredient_collections.id = $1
+            ",
+        )
+        .bind(id)
+        .fetch(&mut *conn);
+
+        match IngredientCollection::try_item_from_stream(&mut stream).await? {
+            Some(item) => Ok(item),
+            None => Err((DbError::NotFound).into()),
+        }
     }
 
     async fn create_multiple(
@@ -157,26 +262,6 @@ impl IngredientCollectionDb for IngredientCollectionDbPostgres<'_> {
 }
 
 impl IngredientCollectionDbPostgres<'_> {
-    async fn get_by_id<'c, E>(executor: E, id: &Uuid) -> Result<IngredientCollection>
-    where
-        E: PgExecutor<'c>,
-    {
-        sqlx::query_as(
-            "
-            SELECT id, ts_created, ts_updated
-            FROM public.ingredient_collections
-            WHERE id = $1
-            ",
-        )
-        .bind(id)
-        .fetch_one(executor)
-        .map_err(|error| match error {
-            sqlx::Error::RowNotFound => Into::<anyhow::Error>::into(DbError::NotFound),
-            _ => error.into(),
-        })
-        .await
-    }
-
     async fn create(
         tx: &mut PgTransaction<'_>,
         _create: IngredientCollectionCreate,
@@ -211,6 +296,10 @@ impl IngredientCollectionDbPostgres<'_> {
         )
         .bind(id)
         .fetch_one(&mut **tx)
+        .map_err(|error| match error {
+            sqlx::Error::RowNotFound => Into::<anyhow::Error>::into(DbError::NotFound),
+            _ => error.into(),
+        })
         .await?;
 
         Ok(updated)
