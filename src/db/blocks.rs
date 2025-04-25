@@ -244,8 +244,8 @@ impl BlockDbPostgres<'_> {
         .await
     }
 
-    async fn create(tx: &mut PgTransaction<'_>, item: BlockCreate) -> Result<Block> {
-        match item.kind {
+    async fn create(tx: &mut PgTransaction<'_>, create: BlockCreate) -> Result<Block> {
+        match create.kind {
             BlockKindTemplate::IngredientCollection {
                 ingredient_collection,
                 ..
@@ -262,22 +262,22 @@ impl BlockDbPostgres<'_> {
                 .execute(&mut **tx)
                 .await?;
 
-                let block_id = Uuid::new_v4();
-                let block = sqlx::query(
+                let item_id = Uuid::new_v4();
+                let item = sqlx::query(
                     "
                     INSERT INTO public.blocks (id, ingredient_collection_block_id)
                     VALUES ($1, $2)
                     RETURNING ts_created
                     ",
                 )
-                .bind(block_id)
+                .bind(item_id)
                 .bind(link_id)
                 .fetch_one(&mut **tx)
                 .await?;
 
                 Ok(Block {
-                    id: block_id,
-                    ts_created: block.get("ts_created"),
+                    id: item_id,
+                    ts_created: item.get("ts_created"),
                     ts_updated: None,
                     data: BlockDataTemplate {
                         kind: BlockKindTemplate::IngredientCollection {
@@ -304,22 +304,22 @@ impl BlockDbPostgres<'_> {
                 .execute(&mut **tx)
                 .await?;
 
-                let block_id = Uuid::new_v4();
-                let block = sqlx::query(
+                let item_id = Uuid::new_v4();
+                let item = sqlx::query(
                     "
                     INSERT INTO public.blocks (id, markdown_block_id)
                     VALUES ($1, $2)
                     RETURNING ts_created
                     ",
                 )
-                .bind(block_id)
+                .bind(item_id)
                 .bind(link_id)
                 .fetch_one(&mut **tx)
                 .await?;
 
                 Ok(Block {
-                    id: block_id,
-                    ts_created: block.get("ts_created"),
+                    id: item_id,
+                    ts_created: item.get("ts_created"),
                     ts_updated: None,
                     data: BlockDataTemplate {
                         kind: BlockKindTemplate::Markdown {
@@ -338,17 +338,15 @@ impl BlockDbPostgres<'_> {
     async fn update_by_id(
         tx: &mut PgTransaction<'_>,
         id: &Uuid,
-        item: BlockUpdate,
+        update: BlockUpdate,
     ) -> Result<Block> {
-        // Starts out as the current item, but gets updated as we go. Reusing it saves us the
-        // clutter of creating and passing around new temporary variables.
-        let mut current = Self::get_by_id(&mut **tx, id).await?;
+        let mut item = Self::get_by_id(&mut **tx, id).await?;
 
-        match &mut current.data.kind {
+        match &mut item.data.kind {
             BlockKindTemplate::IngredientCollection {
                 link_id,
                 ingredient_collection: current,
-            } => match item.kind {
+            } => match update.kind {
                 Some(BlockKindTemplate::IngredientCollection {
                     ingredient_collection: update,
                     ..
@@ -384,7 +382,7 @@ impl BlockDbPostgres<'_> {
             BlockKindTemplate::Markdown {
                 link_id,
                 markdown: current,
-            } => match item.kind {
+            } => match update.kind {
                 Some(BlockKindTemplate::Markdown {
                     markdown: update, ..
                 }) => {
@@ -428,7 +426,7 @@ impl BlockDbPostgres<'_> {
         .execute(&mut **tx)
         .await?;
 
-        Ok(current)
+        Ok(item)
     }
 
     async fn delete_by_id(tx: &mut PgTransaction<'_>, id: &Uuid) -> Result<()> {

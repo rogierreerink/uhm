@@ -177,10 +177,15 @@ impl ProductDbPostgres<'_> {
     async fn update_by_id(
         tx: &mut PgTransaction<'_>,
         id: &Uuid,
-        item: ProductUpdate,
+        update: ProductUpdate,
     ) -> Result<Product> {
-        let current = Self::get_by_id(&mut **tx, id).await?;
-        let updated = sqlx::query_as(
+        let mut item = Self::get_by_id(&mut **tx, id).await?;
+
+        if let Some(name) = update.name {
+            item.data.name = name;
+        }
+
+        sqlx::query(
             "
             UPDATE public.products
             SET name = $2,
@@ -190,10 +195,10 @@ impl ProductDbPostgres<'_> {
             ",
         )
         .bind(id)
-        .bind(item.name.unwrap_or(current.data.name))
-        .fetch_one(&mut **tx)
+        .bind(item.data.name.clone())
+        .execute(&mut **tx)
         .await?;
 
-        Ok(updated)
+        Ok(item)
     }
 }

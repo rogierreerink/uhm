@@ -220,31 +220,47 @@ impl IngredientDbPostgres<'_> {
     async fn create(
         tx: &mut PgTransaction<'_>,
         collection_id: &Uuid,
-        item: IngredientCreate,
+        create: IngredientCreate,
     ) -> Result<Ingredient> {
         let item_id = Uuid::new_v4();
-        let _ = sqlx::query(
+        let item = sqlx::query(
             "
             INSERT INTO public.ingredients (id, ingredient_collection_id, product_id)
             VALUES ($1, $2, $3)
+            RETURNING ts_created, product_id
             ",
         )
         .bind(item_id)
         .bind(collection_id)
-        .bind(item.product.id)
-        .execute(&mut **tx)
+        .bind(create.product.id)
+        .fetch_one(&mut **tx)
         .await?;
 
-        Self::get_by_id(&mut **tx, collection_id, &item_id).await
+        Ok(Ingredient {
+            id: item_id,
+            ts_created: item.get("ts_created"),
+            ts_updated: None,
+            data: IngredientDataTemplate {
+                product: ProductReference {
+                    id: create.product.id,
+                    ..Default::default()
+                },
+            },
+        })
     }
 
     async fn update_by_id(
         tx: &mut PgTransaction<'_>,
         collection_id: &Uuid,
         id: &Uuid,
-        item: IngredientUpdate,
+        update: IngredientUpdate,
     ) -> Result<Ingredient> {
-        let current = Self::get_by_id(&mut **tx, collection_id, id).await?;
+        let mut item = Self::get_by_id(&mut **tx, collection_id, id).await?;
+
+        if let Some(product) = update.product {
+            item.data.product.id = product.id;
+        }
+
         let _ = sqlx::query(
             "
             UPDATE public.ingredients
@@ -255,14 +271,13 @@ impl IngredientDbPostgres<'_> {
         )
         .bind(collection_id)
         .bind(id)
-        .bind(
-            item.product
-                .map(|product| product.id)
-                .unwrap_or(current.data.product.id),
-        )
+        .bind(item.id)
         .execute(&mut **tx)
         .await?;
 
-        Self::get_by_id(&mut **tx, collection_id, id).await
+        // Product data might have been invalidated, just leave it out
+        item.data.product.data = None;
+
+        Ok(item)
     }
 }

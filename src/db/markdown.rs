@@ -176,10 +176,15 @@ impl MarkdownDbPostgres<'_> {
     async fn update_by_id(
         tx: &mut PgTransaction<'_>,
         id: &Uuid,
-        item: MarkdownUpdate,
+        update: MarkdownUpdate,
     ) -> Result<Markdown> {
-        let current = Self::get_by_id(&mut **tx, id).await?;
-        let updated = sqlx::query_as(
+        let mut item = Self::get_by_id(&mut **tx, id).await?;
+
+        if let Some(markdown) = update.markdown {
+            item.data.markdown = markdown;
+        }
+
+        sqlx::query(
             "
             UPDATE public.markdown
             SET markdown = $2,
@@ -189,10 +194,10 @@ impl MarkdownDbPostgres<'_> {
             ",
         )
         .bind(id)
-        .bind(item.markdown.unwrap_or(current.data.markdown))
-        .fetch_one(&mut **tx)
+        .bind(item.data.markdown.clone())
+        .execute(&mut **tx)
         .await?;
 
-        Ok(updated)
+        Ok(item)
     }
 }

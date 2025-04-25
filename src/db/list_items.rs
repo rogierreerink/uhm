@@ -200,22 +200,17 @@ impl ListItemDb for ListItemDbPostgres<'_> {
     }
 
     async fn delete_by_id(&mut self, id: &Uuid) -> Result<()> {
-        let mut conn = self.pool.acquire().await?;
+        let mut tx = self.pool.begin().await?;
 
-        if sqlx::query(
-            "
-            DELETE FROM public.list_items
-            WHERE id = $1
-            ",
-        )
-        .bind(id)
-        .execute(&mut *conn)
-        .await?
-        .rows_affected()
-            == 0
-        {
-            return Err((DbError::NotFound).into());
-        }
+        match Self::delete_by_id(&mut tx, id).await {
+            Ok(item) => item,
+            Err(error) => {
+                tx.rollback().await?;
+                return Err(error.into());
+            }
+        };
+
+        tx.commit().await?;
 
         Ok(())
     }
@@ -265,43 +260,43 @@ impl ListItemDbPostgres<'_> {
         .await
     }
 
-    async fn create(tx: &mut PgTransaction<'_>, item: ListItemCreate) -> Result<ListItem> {
-        match item.kind {
+    async fn create(tx: &mut PgTransaction<'_>, create: ListItemCreate) -> Result<ListItem> {
+        match create.kind {
             ListItemKindTemplate::Product { product, .. } => {
-                let product_list_item_id = Uuid::new_v4();
+                let link_id = Uuid::new_v4();
                 let _ = sqlx::query(
                     "
                     INSERT INTO public.product_list_items (id, product_id)
                     VALUES ($1, $2)
                     ",
                 )
-                .bind(product_list_item_id)
+                .bind(link_id)
                 .bind(product.id)
                 .execute(&mut **tx)
                 .await?;
 
-                let list_item_id = Uuid::new_v4();
-                let list_item = sqlx::query(
+                let item_id = Uuid::new_v4();
+                let item = sqlx::query(
                     "
                     INSERT INTO public.list_items (id, checked, product_list_item_id)
                     VALUES ($1, $2, $3)
-                    RETURNING id, ts_created, checked
+                    RETURNING ts_created, checked
                     ",
                 )
-                .bind(list_item_id)
-                .bind(item.checked)
-                .bind(product_list_item_id)
+                .bind(item_id)
+                .bind(create.checked)
+                .bind(link_id)
                 .fetch_one(&mut **tx)
                 .await?;
 
                 Ok(ListItem {
-                    id: list_item_id,
-                    ts_created: list_item.get("ts_created"),
+                    id: item_id,
+                    ts_created: item.get("ts_created"),
                     ts_updated: None,
                     data: ListItemDataTemplate {
-                        checked: list_item.get("checked"),
+                        checked: item.get("checked"),
                         kind: ListItemKindTemplate::Product {
-                            link_id: product_list_item_id,
+                            link_id,
                             product: ProductReference {
                                 id: product.id,
                                 ..Default::default()
@@ -312,14 +307,14 @@ impl ListItemDbPostgres<'_> {
             }
 
             ListItemKindTemplate::Temporary { temporary, .. } => {
-                let temporary_list_item_id = Uuid::new_v4();
+                let link_id = Uuid::new_v4();
                 let _ = sqlx::query(
                     "
                     INSERT INTO public.temporary_list_items (id, name)
                     VALUES ($1, $2)
                     ",
                 )
-                .bind(temporary_list_item_id.clone())
+                .bind(link_id.clone())
                 .bind(temporary.data.name.clone())
                 .execute(&mut **tx)
                 .await?;
@@ -329,12 +324,12 @@ impl ListItemDbPostgres<'_> {
                     "
                     INSERT INTO public.list_items (id, checked, temporary_list_item_id)
                     VALUES ($1, $2, $3)
-                    RETURNING id, ts_created, checked
+                    RETURNING ts_created, checked
                     ",
                 )
                 .bind(item_id)
-                .bind(item.checked)
-                .bind(temporary_list_item_id)
+                .bind(create.checked)
+                .bind(link_id)
                 .fetch_one(&mut **tx)
                 .await?;
 
@@ -345,7 +340,7 @@ impl ListItemDbPostgres<'_> {
                     data: ListItemDataTemplate {
                         checked: item.get("checked"),
                         kind: ListItemKindTemplate::Temporary {
-                            link_id: temporary_list_item_id,
+                            link_id,
                             temporary: TemporaryListItemTemplate {
                                 data: TemporaryListItemDataTemplate {
                                     name: temporary.data.name,
@@ -361,17 +356,15 @@ impl ListItemDbPostgres<'_> {
     async fn update_by_id(
         tx: &mut PgTransaction<'_>,
         id: &Uuid,
-        item: ListItemUpdate,
+        update: ListItemUpdate,
     ) -> Result<ListItem> {
-        // Starts out as the current item, but gets updated as we go. Reusing it saves us the
-        // clutter of creating and passing around new temporary variables.
-        let mut current = Self::get_by_id(&mut **tx, id).await?;
+        let mut item = Self::get_by_id(&mut **tx, id).await?;
 
-        match &mut current.data.kind {
+        match &mut item.data.kind {
             ListItemKindTemplate::Product {
                 link_id,
                 product: current,
-            } => match item.kind {
+            } => match update.kind {
                 Some(ListItemKindTemplate::Product {
                     product: update, ..
                 }) => {
@@ -391,6 +384,9 @@ impl ListItemDbPostgres<'_> {
                     .bind(current.id)
                     .execute(&mut **tx)
                     .await?;
+
+                    // Data might have been invalidated, just leave it out
+                    current.data = None;
                 }
 
                 // List item type cannot be changed
@@ -403,7 +399,7 @@ impl ListItemDbPostgres<'_> {
             ListItemKindTemplate::Temporary {
                 link_id,
                 temporary: current,
-            } => match item.kind {
+            } => match update.kind {
                 Some(ListItemKindTemplate::Temporary {
                     temporary: update, ..
                 }) => {
@@ -448,7 +444,37 @@ impl ListItemDbPostgres<'_> {
         .execute(&mut **tx)
         .await?;
 
-        // Get the new state from the database
-        Ok(Self::get_by_id(&mut **tx, id).await?)
+        Ok(item)
+    }
+
+    async fn delete_by_id(tx: &mut PgTransaction<'_>, id: &Uuid) -> Result<()> {
+        let item = Self::get_by_id(&mut **tx, id).await?;
+
+        let delete_link_query = match item.data.kind {
+            ListItemKindTemplate::Product { link_id, .. } => sqlx::query(
+                "
+                DELETE FROM public.product_list_items
+                WHERE id = $1
+                ",
+            )
+            .bind(link_id)
+            .execute(&mut **tx),
+
+            ListItemKindTemplate::Temporary { link_id, .. } => sqlx::query(
+                "
+                DELETE FROM public.temporary_list_items
+                WHERE id = $1
+                ",
+            )
+            .bind(link_id)
+            .execute(&mut **tx),
+        };
+
+        // We are relying on cascaded deletion of the main item
+        if delete_link_query.await?.rows_affected() == 0 {
+            return Err((DbError::InvalidContent).into());
+        }
+
+        Ok(())
     }
 }

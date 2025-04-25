@@ -166,7 +166,6 @@ impl IngredientCollectionDbPostgres<'_> {
             SELECT id, ts_created, ts_updated
             FROM public.ingredient_collections
             WHERE id = $1
-            ORDER BY id
             ",
         )
         .bind(id)
@@ -180,7 +179,7 @@ impl IngredientCollectionDbPostgres<'_> {
 
     async fn create(
         tx: &mut PgTransaction<'_>,
-        _item: IngredientCollectionCreate,
+        _create: IngredientCollectionCreate,
     ) -> Result<IngredientCollection> {
         let item_id = Uuid::new_v4();
         let item = sqlx::query_as(
@@ -200,7 +199,7 @@ impl IngredientCollectionDbPostgres<'_> {
     async fn update_by_id(
         tx: &mut PgTransaction<'_>,
         id: &Uuid,
-        _item: IngredientCollectionUpdate,
+        _update: IngredientCollectionUpdate,
     ) -> Result<IngredientCollection> {
         let updated = sqlx::query_as(
             "
