@@ -1,550 +1,463 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use deadpool::managed::Object;
-use deadpool_postgres::Manager;
+use futures_util::{TryFutureExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use tokio_postgres::Row;
+use sqlx::{postgres::PgRow, prelude::FromRow, PgExecutor, PgPool, PgTransaction, Row};
 use uuid::Uuid;
-use variants::variants;
 
-use super::DbError;
+use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
+
+use super::{
+    ingredient_collections::{IngredientCollectionDataTemplate, IngredientCollectionReference},
+    markdown::{MarkdownDataTemplate, MarkdownReference},
+    DbError,
+};
 
 #[trait_variant::make(Send)]
-pub trait DbBlocks {
-    async fn get(&mut self) -> Result<Vec<BlockMinimal>>;
+pub trait BlockDb {
+    async fn get_multiple(&mut self) -> Result<Vec<Block>>;
     async fn get_by_id(&mut self, id: &Uuid) -> Result<Block>;
-    async fn create(&mut self, blocks: &Vec<BlockDataNew>) -> Result<Vec<BlockMinimal>>;
-    async fn update(&mut self, id: &Uuid, block: &BlockDataUpdate) -> Result<BlockMinimal>;
-    async fn delete(&mut self, id: &Uuid) -> Result<()>;
+    async fn create_multiple(&mut self, items: Vec<BlockCreate>) -> Result<Vec<Block>>;
+    async fn update_by_id(&mut self, id: &Uuid, item: BlockUpdate) -> Result<Block>;
+    async fn delete_by_id(&mut self, id: &Uuid) -> Result<()>;
 }
 
-#[variants(Minimal)]
-#[derive(Serialize)]
-pub struct Block {
-    #[variants(include(Minimal))]
-    pub id: Uuid,
+pub type Block = BlockTemplate<Query>;
+pub type BlockCreate = BlockDataTemplate<Create>;
+pub type BlockUpdate = BlockDataTemplate<Update>;
+pub type BlockReference = BlockTemplate<Reference>;
 
-    #[variants(include(Minimal))]
-    pub ts_created: DateTime<Utc>,
-
-    #[variants(include(Minimal))]
-    pub ts_updated: Option<DateTime<Utc>>,
-
-    #[variants(include(Minimal), retype = "{t}{v}")]
-    pub data: BlockData,
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct BlockTemplate<M: Modifier> {
+    pub id: M::Key<Uuid>,
+    #[serde(skip_serializing_if = "M::skip_meta")]
+    pub ts_created: M::Meta<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "M::skip_meta")]
+    pub ts_updated: M::Meta<Option<DateTime<Utc>>>,
+    #[serde(skip_serializing_if = "M::skip_data")]
+    pub data: M::Data<BlockDataTemplate<M>>,
 }
 
-#[variants(Minimal)]
-impl From<&Row> for Block {
-    fn from(row: &Row) -> Self {
-        Self {
-            #[variants(include(Minimal))]
-            id: row.get("id"),
-
-            #[variants(include(Minimal))]
-            ts_created: row.get("ts_created"),
-
-            #[variants(include(Minimal))]
-            ts_updated: row.get("ts_updated"),
-
-            #[variants(include(Minimal))]
-            data: row.into(),
-        }
-    }
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct BlockDataTemplate<M: Modifier> {
+    pub kind: M::Data<BlockKindTemplate<M>>,
 }
 
-#[variants(Minimal, New, Update)]
-#[derive(Serialize, Deserialize)]
-pub struct BlockData {
-    #[variants(include(Minimal, New), retype = "{t}{v}")]
-    #[variants(include(Update), retype = "Option<{t}{v}>")]
-    pub kind: BlockKind,
-}
-
-#[variants(Minimal)]
-impl From<&Row> for BlockData {
-    fn from(row: &Row) -> Self {
-        Self {
-            #[variants(include(Minimal))]
-            kind: row.into(),
-        }
-    }
-}
-
-#[variants(Minimal, New, Update)]
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum BlockKind {
+pub enum BlockKindTemplate<M: Modifier> {
     IngredientCollection {
-        #[variants(include(Minimal, New))]
-        #[variants(include(Update), retype = "Option<{t}>")]
-        id: Uuid,
-        data: IngredientCollectionData,
+        #[serde(skip)]
+        link_id: M::Meta<Uuid>,
+        #[serde(flatten)]
+        ingredient_collection: M::Data<IngredientCollectionReference>,
     },
-    Paragraph {
-        #[variants(include(Minimal, New), retype = "{t}{v}")]
-        #[variants(include(Update), retype = "Option<{t}{v}>")]
-        data: ParagraphData,
+    Markdown {
+        #[serde(skip)]
+        link_id: M::Meta<Uuid>,
+        #[serde(flatten)]
+        markdown: M::Data<MarkdownReference>,
     },
 }
 
-#[variants(Minimal)]
-impl From<&Row> for BlockKind {
-    fn from(row: &Row) -> Self {
-        if let Some(_) = row.get::<_, Option<Uuid>>("ingredient_collection_block_id") {
-            Self::IngredientCollection {
-                #[variants(include(Minimal))]
-                id: row.get("ingredient_collection_id"),
-                data: row.into(),
-            }
-        } else if let Some(_) = row.get::<_, Option<Uuid>>("paragraph_block_id") {
-            Self::Paragraph {
-                #[variants(include(Minimal))]
-                data: row.into(),
-            }
-        } else {
-            panic!()
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct IngredientCollectionData {}
-
-impl From<&Row> for IngredientCollectionData {
-    fn from(_: &Row) -> Self {
-        Self {}
-    }
-}
-
-#[variants(Minimal, New, Update)]
-#[derive(Serialize, Deserialize)]
-pub struct ParagraphData {
-    #[variants(include(Minimal, New))]
-    #[variants(include(Update), retype = "Option<{t}>")]
-    pub text: String,
-}
-
-#[variants(Minimal)]
-impl From<&Row> for ParagraphData {
-    fn from(row: &Row) -> Self {
-        Self {
-            #[variants(include(Minimal))]
-            text: row.get("paragraph_block_text"),
-        }
-    }
-}
-
-pub struct DbBlocksPostgres {
-    connection: Object<Manager>,
-}
-
-impl DbBlocksPostgres {
-    pub fn new(connection: Object<Manager>) -> Self {
-        Self { connection }
-    }
-}
-
-impl DbBlocks for DbBlocksPostgres {
-    async fn get(&mut self) -> Result<Vec<BlockMinimal>> {
-        tracing::debug!("preparing cached statement");
-        let stmt = self
-            .connection
-            .prepare_cached(
-                "
-                SELECT
-                    blocks.id,
-                    blocks.ts_created,
-                    blocks.ts_updated,
-                    ingredient_collection_blocks.id AS ingredient_collection_block_id,
-                    ingredient_collection_blocks.ingredient_collection_id AS ingredient_collection_id,
-                    paragraph_blocks.id AS paragraph_block_id,
-                    paragraph_blocks.text AS paragraph_block_text
-
-                FROM public.blocks
-                    LEFT JOIN public.ingredient_collection_blocks
-                        ON blocks.ingredient_collection_block_id = ingredient_collection_blocks.id
-                    LEFT JOIN public.paragraph_blocks
-                        ON blocks.paragraph_block_id = paragraph_blocks.id
-
-                ORDER BY blocks.id
-                "
-            )
-            .await?;
-
-        tracing::debug!("executing query");
-        let blocks = self
-            .connection
-            .query(&stmt, &[])
-            .await?
-            .into_iter()
-            .map(|row| (&row).into())
-            .collect();
-
-        Ok(blocks)
-    }
-
-    async fn get_by_id(&mut self, id: &Uuid) -> Result<Block> {
-        tracing::debug!("preparing cached statement");
-        let stmt = self
-            .connection
-            .prepare_cached(
-                "
-                SELECT
-                    blocks.id,
-                    blocks.ts_created,
-                    blocks.ts_updated,
-                    ingredient_collection_blocks.id AS ingredient_collection_block_id,
-                    ingredient_collection_blocks.ingredient_collection_id AS ingredient_collection_id,
-                    paragraph_blocks.id AS paragraph_block_id,
-                    paragraph_blocks.text AS paragraph_block_text
-
-                FROM public.blocks
-                    LEFT JOIN public.ingredient_collection_blocks
-                        ON blocks.ingredient_collection_block_id = ingredient_collection_blocks.id
-                    LEFT JOIN public.paragraph_blocks
-                        ON blocks.paragraph_block_id = paragraph_blocks.id
-
-                WHERE blocks.id = $1
-                ",
-            )
-            .await?;
-
-        tracing::debug!("executing query");
-        let block = match self.connection.query(&stmt, &[id]).await? {
-            rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
-            rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
-            rows => (&rows[0]).into(),
-        };
-
-        Ok(block)
-    }
-
-    async fn create(&mut self, blocks: &Vec<BlockDataNew>) -> Result<Vec<BlockMinimal>> {
-        tracing::debug!("starting database transaction");
-        let transaction = self.connection.transaction().await?;
-
-        let mut inserted = Vec::new();
-        for block in blocks {
-            let block_id = Uuid::new_v4();
-            let kind_id = Uuid::new_v4();
-
-            inserted.push(match &block.kind {
-                BlockKindNew::IngredientCollection { id } => {
-                    tracing::debug!(
-                        "create ingredient collection block: preparing cached statement"
-                    );
-                    let stmt = transaction
-                        .prepare_cached(
-                            "
-                            INSERT INTO public.ingredient_collection_blocks (
-                                id,
-                                ingredient_collection_id
-                            )
-                            VALUES (
-                                $1, $2
-                            )
-                            ",
-                        )
-                        .await?;
-
-                    tracing::debug!("create ingredient collection block: executing query");
-                    transaction.execute(&stmt, &[&kind_id, id]).await?;
-
-                    tracing::debug!("create block: preparing cached statement");
-                    let stmt = transaction
-                        .prepare_cached(
-                            "
-                            INSERT INTO public.blocks (
-                                id,
-                                ingredient_collection_block_id
-                            )
-                            VALUES (
-                                $1, $2
-                            )
-                            RETURNING ts_created
-                            ",
-                        )
-                        .await?;
-
-                    tracing::debug!("create block: executing query");
-                    let row = transaction.query_one(&stmt, &[&block_id, &kind_id]).await?;
-
-                    BlockMinimal {
-                        id: block_id,
-                        ts_created: row.get("ts_created"),
-                        ts_updated: None,
-                        data: BlockDataMinimal {
-                            kind: BlockKindMinimal::IngredientCollection { id: *id },
-                        },
-                    }
-                }
-                BlockKindNew::Paragraph { data } => {
-                    tracing::debug!("create paragraph block: preparing cached statement");
-                    let stmt = transaction
-                        .prepare_cached(
-                            "
-                            INSERT INTO public.paragraph_blocks (
-                                id,
-                                text
-                            )
-                            VALUES (
-                                $1, $2
-                            )
-                            ",
-                        )
-                        .await?;
-
-                    tracing::debug!("create paragraph block: executing query");
-                    transaction.execute(&stmt, &[&kind_id, &data.text]).await?;
-
-                    tracing::debug!("create block: preparing cached statement");
-                    let stmt = transaction
-                        .prepare_cached(
-                            "
-                            INSERT INTO public.blocks (
-                                id,
-                                paragraph_block_id
-                            )
-                            VALUES (
-                                $1, $2
-                            )
-                            RETURNING ts_created
-                            ",
-                        )
-                        .await?;
-
-                    tracing::debug!("create block: executing query");
-                    let row = transaction.query_one(&stmt, &[&block_id, &kind_id]).await?;
-
-                    BlockMinimal {
-                        id: block_id,
-                        ts_created: row.get("ts_created"),
-                        ts_updated: None,
-                        data: BlockDataMinimal {
-                            kind: BlockKindMinimal::Paragraph {
-                                data: ParagraphDataMinimal {
-                                    text: data.text.clone(),
-                                },
+impl FromRow<'_, PgRow> for Block {
+    fn from_row(row: &'_ PgRow) -> std::result::Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: row.get("id"),
+            ts_created: row.get("ts_created"),
+            ts_updated: row.get("ts_updated"),
+            data: BlockDataTemplate {
+                kind: {
+                    if let Some(id) = row.get("ingredient_collection_block_id") {
+                        BlockKindTemplate::IngredientCollection {
+                            link_id: id,
+                            ingredient_collection: IngredientCollectionReference {
+                                id: row.get("ingredient_collection_id"),
+                                data: Some(IngredientCollectionDataTemplate {
+                                    ..Default::default()
+                                }),
+                                ..Default::default()
                             },
-                        },
+                        }
+                    } else if let Some(id) = row.get("markdown_block_id") {
+                        BlockKindTemplate::Markdown {
+                            link_id: id,
+                            markdown: MarkdownReference {
+                                id: row.get("markdown_id"),
+                                data: Some(MarkdownDataTemplate {
+                                    markdown: row.get("markdown"),
+                                    ..Default::default()
+                                }),
+                                ..Default::default()
+                            },
+                        }
+                    } else {
+                        panic!("unreachable!")
                     }
-                }
-            })
-        }
-
-        tracing::debug!("committing database transaction");
-        transaction.commit().await?;
-
-        Ok(inserted)
-    }
-
-    async fn update(&mut self, id: &Uuid, block: &BlockDataUpdate) -> Result<BlockMinimal> {
-        tracing::debug!("starting database transaction");
-        let transaction = self.connection.transaction().await?;
-
-        tracing::debug!("get current block: preparing cached statement");
-        let stmt = transaction
-            .prepare_cached(
-                "
-                SELECT
-                    blocks.id,
-                    blocks.ts_created,
-                    blocks.ts_updated,
-                    ingredient_collection_blocks.id AS ingredient_collection_block_id,
-                    ingredient_collection_blocks.ingredient_collection_id AS ingredient_collection_id,
-                    paragraph_blocks.id AS paragraph_block_id,
-                    paragraph_blocks.text AS paragraph_block_text
-
-                FROM public.blocks
-                    LEFT JOIN public.ingredient_collection_blocks
-                        ON blocks.ingredient_collection_block_id = ingredient_collection_blocks.id
-                    LEFT JOIN public.paragraph_blocks
-                        ON blocks.paragraph_block_id = paragraph_blocks.id
-
-                WHERE blocks.id = $1
-                ",
-            )
-            .await?;
-
-        tracing::debug!("get current block: executing query");
-        let current = match transaction.query(&stmt, &[id]).await? {
-            rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
-            rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
-            mut rows => rows.pop().unwrap(),
-        };
-
-        let updated_block_kind = match &block.kind {
-            Some(BlockKindUpdate::IngredientCollection { id }) => {
-                let block_id: Uuid = match current.get("ingredient_collection_block_id") {
-                    Some(id) => id,
-                    None => return Err(DbError::InvalidOperation.into()),
-                };
-
-                tracing::debug!("update ingredient collection block: executing query");
-                let stmt = transaction
-                    .prepare_cached(
-                        "
-                        UPDATE public.ingredient_collection_blocks
-                        SET ingredient_collection_id = $2,
-                            ts_updated = CURRENT_TIMESTAMP
-                        WHERE id = $1
-                        ",
-                    )
-                    .await?;
-
-                let ingredient_collection_id =
-                    id.unwrap_or(current.get("ingredient_collection_id"));
-
-                tracing::debug!("update ingredient collection block: executing query");
-                match transaction
-                    .execute(&stmt, &[&block_id, &ingredient_collection_id])
-                    .await?
-                {
-                    count if count == 0 => return Err(DbError::NotFound.into()),
-                    count if count >= 2 => return Err(DbError::TooMany.into()),
-                    _ => (),
-                }
-
-                BlockKindMinimal::IngredientCollection {
-                    id: ingredient_collection_id,
-                }
-            }
-
-            Some(BlockKindUpdate::Paragraph { data }) => {
-                let block_id: Uuid = match current.get("paragraph_block_id") {
-                    Some(id) => id,
-                    None => return Err(DbError::InvalidOperation.into()),
-                };
-
-                tracing::debug!("update paragraph block: executing query");
-                let stmt = transaction
-                    .prepare_cached(
-                        "
-                        UPDATE public.paragraph_blocks
-                        SET text = $2,
-                            ts_updated = CURRENT_TIMESTAMP
-                        WHERE id = $1
-                        ",
-                    )
-                    .await?;
-
-                let text = data
-                    .as_ref()
-                    .and_then(|data| data.text.clone())
-                    .unwrap_or(current.get("paragraph_block_text"));
-
-                tracing::debug!("update paragraph block: executing query");
-                match transaction.execute(&stmt, &[&block_id, &text]).await? {
-                    count if count == 0 => return Err(DbError::NotFound.into()),
-                    count if count >= 2 => return Err(DbError::TooMany.into()),
-                    _ => (),
-                }
-
-                BlockKindMinimal::Paragraph {
-                    data: ParagraphDataMinimal { text },
-                }
-            }
-
-            None => BlockKindMinimal::from(&current),
-        };
-
-        tracing::debug!("update block: executing query");
-        let stmt = transaction
-            .prepare_cached(
-                "
-                UPDATE public.blocks
-                SET ts_updated = CURRENT_TIMESTAMP
-                WHERE id = $1
-                RETURNING ts_updated
-                ",
-            )
-            .await?;
-
-        tracing::debug!("update block: executing query");
-        let updated = match transaction.query(&stmt, &[id]).await? {
-            rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
-            rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
-            mut rows => rows.pop().unwrap(),
-        };
-
-        tracing::debug!("committing database transaction");
-        transaction.commit().await?;
-
-        Ok(BlockMinimal {
-            id: *id,
-            ts_created: current.get("ts_created"),
-            ts_updated: updated.get("ts_updated"),
-            data: BlockDataMinimal {
-                kind: updated_block_kind,
+                },
             },
         })
     }
+}
 
-    async fn delete(&mut self, id: &Uuid) -> Result<()> {
-        tracing::debug!("starting database transaction");
-        let transaction = self.connection.transaction().await?;
+pub struct BlockDbPostgres<'a> {
+    pool: &'a PgPool,
+}
 
-        tracing::debug!("delete block: preparing cached statement");
-        let stmt = transaction
-            .prepare_cached(
-                "
-                DELETE FROM public.blocks
-                WHERE id = $1
-                RETURNING
-                    ingredient_collection_block_id,
-                    paragraph_block_id
-                ",
-            )
-            .await?;
+impl<'a> BlockDbPostgres<'a> {
+    pub fn new(pool: &'a PgPool) -> Self {
+        Self { pool }
+    }
+}
 
-        tracing::debug!("delete block: executing query");
-        let block = match transaction.query(&stmt, &[id]).await? {
-            rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
-            rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
-            mut rows => rows.pop().unwrap(),
+impl BlockDb for BlockDbPostgres<'_> {
+    async fn get_multiple(&mut self) -> Result<Vec<Block>> {
+        let mut conn = self.pool.acquire().await?;
+
+        sqlx::query_as(
+            "
+            SELECT
+                blocks.id,
+                blocks.ts_created,
+                blocks.ts_updated,
+                ingredient_collection_blocks.id AS ingredient_collection_block_id,
+                ingredient_collections.id AS ingredient_collection_id,
+                markdown_blocks.id AS markdown_block_id,
+                markdown.id AS markdown_id,
+                markdown.markdown AS markdown
+
+            FROM public.blocks
+                LEFT JOIN public.ingredient_collection_blocks
+                    ON blocks.ingredient_collection_block_id = ingredient_collection_blocks.id
+                LEFT JOIN public.ingredient_collections
+                    ON ingredient_collection_blocks.ingredient_collection_id = ingredient_collections.id
+
+                LEFT JOIN public.markdown_blocks
+                    ON blocks.markdown_block_id = markdown_blocks.id
+                LEFT JOIN public.markdown
+                    ON markdown_blocks.markdown_id = markdown.id
+
+            ORDER BY blocks.id
+            ",
+        )
+        .fetch(&mut *conn)
+        .try_collect()
+        .map_err(|error| error.into())
+        .await
+    }
+
+    async fn get_by_id(&mut self, id: &Uuid) -> Result<Block> {
+        let mut conn = self.pool.acquire().await?;
+
+        Self::get_by_id(&mut *conn, id).await
+    }
+
+    async fn create_multiple(&mut self, items: Vec<BlockCreate>) -> Result<Vec<Block>> {
+        let mut tx = self.pool.begin().await?;
+        let mut created = Vec::new();
+
+        for item in items {
+            match Self::create(&mut tx, item).await {
+                Ok(item) => created.push(item),
+                Err(error) => {
+                    tx.rollback().await?;
+                    return Err(error.into());
+                }
+            }
+        }
+
+        tx.commit().await?;
+
+        Ok(created)
+    }
+
+    async fn update_by_id(&mut self, id: &Uuid, item: BlockUpdate) -> Result<Block> {
+        let mut tx = self.pool.begin().await?;
+
+        let updated = match Self::update_by_id(&mut tx, id, item).await {
+            Ok(item) => item,
+            Err(error) => {
+                tx.rollback().await?;
+                return Err(error.into());
+            }
         };
 
-        if let Some(block_id) = block.get::<_, Option<Uuid>>("ingredient_collection_block_id") {
-            tracing::debug!("delete ingredient collection block: preparing cached statement");
-            let stmt = transaction
-                .prepare_cached(
+        tx.commit().await?;
+
+        Ok(updated)
+    }
+
+    async fn delete_by_id(&mut self, id: &Uuid) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        match Self::delete_by_id(&mut tx, id).await {
+            Ok(item) => item,
+            Err(error) => {
+                tx.rollback().await?;
+                return Err(error.into());
+            }
+        };
+
+        tx.commit().await?;
+
+        Ok(())
+    }
+}
+
+impl BlockDbPostgres<'_> {
+    async fn get_by_id<'c, E>(executor: E, id: &Uuid) -> Result<Block>
+    where
+        E: PgExecutor<'c>,
+    {
+        sqlx::query_as(
+            "
+            SELECT
+                blocks.id,
+                blocks.ts_created,
+                blocks.ts_updated,
+                ingredient_collection_blocks.id AS ingredient_collection_block_id,
+                ingredient_collections.id AS ingredient_collection_id,
+                markdown_blocks.id AS markdown_block_id,
+                markdown.id AS markdown_id,
+                markdown.markdown AS markdown
+
+            FROM public.blocks
+                LEFT JOIN public.ingredient_collection_blocks
+                    ON blocks.ingredient_collection_block_id = ingredient_collection_blocks.id
+                LEFT JOIN public.ingredient_collections
+                    ON ingredient_collection_blocks.ingredient_collection_id = ingredient_collections.id
+
+                LEFT JOIN public.markdown_blocks
+                    ON blocks.markdown_block_id = markdown_blocks.id
+                LEFT JOIN public.markdown
+                    ON markdown_blocks.markdown_id = markdown.id
+
+            WHERE blocks.id = $1
+            ",
+        )
+        .bind(id)
+        .fetch_one(executor)
+        .map_err(|error| match error {
+            sqlx::Error::RowNotFound => Into::<anyhow::Error>::into(DbError::NotFound),
+            _ => error.into(),
+        })
+        .await
+    }
+
+    async fn create(tx: &mut PgTransaction<'_>, item: BlockCreate) -> Result<Block> {
+        match item.kind {
+            BlockKindTemplate::IngredientCollection {
+                ingredient_collection,
+                ..
+            } => {
+                let link_id = Uuid::new_v4();
+                let _ = sqlx::query(
                     "
-                    DELETE FROM public.ingredient_collection_blocks
-                    WHERE id = $1
+                    INSERT INTO public.ingredient_collection_blocks (id, ingredient_collection_id)
+                    VALUES ($1, $2)
                     ",
                 )
+                .bind(link_id)
+                .bind(ingredient_collection.id)
+                .execute(&mut **tx)
                 .await?;
 
-            tracing::debug!("delete ingredient collection block: executing query");
-            match transaction.execute(&stmt, &[&block_id]).await? {
-                count if count == 0 => return Err(DbError::NotFound.into()),
-                count if count >= 2 => return Err(DbError::TooMany.into()),
-                _ => (),
-            };
-        }
-
-        if let Some(block_id) = block.get::<_, Option<Uuid>>("paragraph_block_id") {
-            tracing::debug!("delete paragraph block: preparing cached statement");
-            let stmt = transaction
-                .prepare_cached(
+                let block_id = Uuid::new_v4();
+                let block = sqlx::query(
                     "
-                    DELETE FROM public.paragraph_blocks
-                    WHERE id = $1
+                    INSERT INTO public.blocks (id, ingredient_collection_block_id)
+                    VALUES ($1, $2)
+                    RETURNING ts_created
                     ",
                 )
+                .bind(block_id)
+                .bind(link_id)
+                .fetch_one(&mut **tx)
                 .await?;
 
-            tracing::debug!("delete paragraph block: executing query");
-            match transaction.execute(&stmt, &[&block_id]).await? {
-                count if count == 0 => return Err(DbError::NotFound.into()),
-                count if count >= 2 => return Err(DbError::TooMany.into()),
-                _ => (),
-            };
-        }
+                Ok(Block {
+                    id: block_id,
+                    ts_created: block.get("ts_created"),
+                    ts_updated: None,
+                    data: BlockDataTemplate {
+                        kind: BlockKindTemplate::IngredientCollection {
+                            link_id,
+                            ingredient_collection: IngredientCollectionReference {
+                                id: ingredient_collection.id,
+                                ..Default::default()
+                            },
+                        },
+                    },
+                })
+            }
 
-        tracing::debug!("committing database transaction");
-        transaction.commit().await?;
+            BlockKindTemplate::Markdown { markdown, .. } => {
+                let link_id = Uuid::new_v4();
+                let _ = sqlx::query(
+                    "
+                    INSERT INTO public.markdown_blocks (id, markdown_id)
+                    VALUES ($1, $2)
+                    ",
+                )
+                .bind(link_id)
+                .bind(markdown.id)
+                .execute(&mut **tx)
+                .await?;
+
+                let block_id = Uuid::new_v4();
+                let block = sqlx::query(
+                    "
+                    INSERT INTO public.blocks (id, markdown_block_id)
+                    VALUES ($1, $2)
+                    RETURNING ts_created
+                    ",
+                )
+                .bind(block_id)
+                .bind(link_id)
+                .fetch_one(&mut **tx)
+                .await?;
+
+                Ok(Block {
+                    id: block_id,
+                    ts_created: block.get("ts_created"),
+                    ts_updated: None,
+                    data: BlockDataTemplate {
+                        kind: BlockKindTemplate::Markdown {
+                            link_id,
+                            markdown: MarkdownReference {
+                                id: markdown.id,
+                                ..Default::default()
+                            },
+                        },
+                    },
+                })
+            }
+        }
+    }
+
+    async fn update_by_id(
+        tx: &mut PgTransaction<'_>,
+        id: &Uuid,
+        item: BlockUpdate,
+    ) -> Result<Block> {
+        // Starts out as the current item, but gets updated as we go. Reusing it saves us the
+        // clutter of creating and passing around new temporary variables.
+        let mut current = Self::get_by_id(&mut **tx, id).await?;
+
+        match &mut current.data.kind {
+            BlockKindTemplate::IngredientCollection {
+                link_id,
+                ingredient_collection: current,
+            } => match item.kind {
+                Some(BlockKindTemplate::IngredientCollection {
+                    ingredient_collection: update,
+                    ..
+                }) => {
+                    if let Some(update) = update {
+                        current.id = update.id
+                    }
+
+                    sqlx::query(
+                        "
+                         UPDATE public.ingredient_collection_blocks
+                         SET ingredient_collection_id = $2,
+                             ts_updated = NOW()
+                         WHERE id = $1
+                         ",
+                    )
+                    .bind(link_id.clone())
+                    .bind(current.id)
+                    .execute(&mut **tx)
+                    .await?;
+
+                    // Data might have been invalidated, just leave it out
+                    current.data = None;
+                }
+
+                // List item type cannot be changed
+                Some(_) => return Err((DbError::InvalidOperation).into()),
+
+                // Nothing to update
+                _ => {}
+            },
+
+            BlockKindTemplate::Markdown {
+                link_id,
+                markdown: current,
+            } => match item.kind {
+                Some(BlockKindTemplate::Markdown {
+                    markdown: update, ..
+                }) => {
+                    if let Some(update) = update {
+                        current.id = update.id
+                    }
+
+                    sqlx::query(
+                        "
+                         UPDATE public.markdown_blocks
+                         SET markdown_id = $2,
+                             ts_updated = NOW()
+                         WHERE id = $1
+                         ",
+                    )
+                    .bind(link_id.clone())
+                    .bind(current.id)
+                    .execute(&mut **tx)
+                    .await?;
+
+                    // Data might have been invalidated, just leave it out
+                    current.data = None;
+                }
+
+                // List item type cannot be changed
+                Some(_) => return Err((DbError::InvalidOperation).into()),
+
+                // Nothing to update
+                _ => {}
+            },
+        };
+
+        sqlx::query(
+            "
+             UPDATE public.blocks
+             SET ts_updated = NOW()
+             WHERE id = $1
+             ",
+        )
+        .bind(id)
+        .execute(&mut **tx)
+        .await?;
+
+        Ok(current)
+    }
+
+    async fn delete_by_id(tx: &mut PgTransaction<'_>, id: &Uuid) -> Result<()> {
+        let item = Self::get_by_id(&mut **tx, id).await?;
+
+        let delete_link_query = match item.data.kind {
+            BlockKindTemplate::IngredientCollection { link_id, .. } => sqlx::query(
+                "
+                DELETE FROM public.ingredient_collection_blocks
+                WHERE id = $1
+                ",
+            )
+            .bind(link_id)
+            .execute(&mut **tx),
+
+            BlockKindTemplate::Markdown { link_id, .. } => sqlx::query(
+                "
+                DELETE FROM public.markdown_blocks
+                WHERE id = $1
+                ",
+            )
+            .bind(link_id)
+            .execute(&mut **tx),
+        };
+
+        // We are relying on cascaded deletion of the main item
+        if delete_link_query.await?.rows_affected() == 0 {
+            return Err((DbError::InvalidContent).into());
+        }
 
         Ok(())
     }

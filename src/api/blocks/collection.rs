@@ -1,5 +1,6 @@
-use crate::db::blocks::{BlockDataNew, BlockMinimal, DbBlocks};
+use crate::db::blocks::{BlockCreate, BlockDb};
 use crate::global::AppState;
+use crate::utilities::request::collection::{GetResponse, PostRequest, PostResponse};
 use crate::{api::handle_options, db::Db};
 
 use axum::{
@@ -9,7 +10,6 @@ use axum::{
     routing::{get, options, post},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -36,15 +36,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     )
 }
 
-#[derive(Serialize)]
-struct GetResponse {
-    data: Vec<BlockMinimal>,
-}
-
 #[axum::debug_handler]
 #[instrument(skip(state))]
 pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut db_blocks = match state.db().blocks().await {
+    let mut db = match state.db().blocks().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -52,34 +47,24 @@ pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResp
         }
     };
 
-    let blocks = match db_blocks.get().await {
-        Ok(blocks) => blocks,
+    let items = match db.get_multiple().await {
+        Ok(items) => items,
         Err(err) => {
-            tracing::error!("failed to get blocks: {:?}", err);
+            tracing::error!("failed to get items: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
-    Ok((StatusCode::OK, Json(GetResponse { data: blocks })))
-}
-
-#[derive(Deserialize)]
-struct PostRequest {
-    data: Vec<BlockDataNew>,
-}
-
-#[derive(Serialize)]
-struct PostResponse {
-    data: Vec<BlockMinimal>,
+    Ok((StatusCode::OK, Json(GetResponse { data: items })))
 }
 
 #[axum::debug_handler]
-#[instrument(skip(state, block))]
+#[instrument(skip(state, payload))]
 pub async fn post_collection(
     State(state): State<Arc<AppState>>,
-    Json(block): Json<PostRequest>,
+    Json(payload): Json<PostRequest<BlockCreate>>,
 ) -> impl IntoResponse {
-    let mut db_blocks = match state.db().blocks().await {
+    let mut db = match state.db().blocks().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -87,13 +72,13 @@ pub async fn post_collection(
         }
     };
 
-    let blocks = match db_blocks.create(&block.data).await {
-        Ok(blocks) => blocks,
+    let created = match db.create_multiple(payload.data).await {
+        Ok(created) => created,
         Err(err) => {
-            tracing::error!("failed to create blocks: {:?}", err);
+            tracing::error!("failed to create items: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
-    Ok((StatusCode::CREATED, Json(PostResponse { data: blocks })))
+    Ok((StatusCode::CREATED, Json(PostResponse { data: created })))
 }

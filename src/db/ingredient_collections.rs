@@ -45,7 +45,7 @@ pub struct IngredientCollectionTemplate<M: Modifier> {
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct IngredientCollectionDataTemplate<M: Modifier> {
     #[serde(skip)]
-    _phantom_data: M::Data<()>,
+    pub _phantom_data: M::Data<()>,
 }
 
 impl FromRow<'_, PgRow> for IngredientCollection {

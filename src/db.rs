@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display};
 
 use anyhow::Result;
-use deadpool::managed::{Object, Pool};
+use deadpool::managed::Pool;
 use deadpool_postgres::Manager;
 use sqlx::PgPool;
 
@@ -15,7 +15,7 @@ pub mod products;
 
 #[trait_variant::make(Send)]
 pub trait Db {
-    async fn blocks(&self) -> Result<impl blocks::DbBlocks>;
+    async fn blocks(&self) -> Result<impl blocks::BlockDb>;
     async fn ingredient_collections(
         &self,
     ) -> Result<impl ingredient_collections::IngredientCollectionDb>;
@@ -34,16 +34,11 @@ impl DbPostgres {
     pub fn new(pool: Pool<Manager>, sqlx: PgPool) -> Self {
         Self { pool, sqlx }
     }
-
-    async fn get_connection(&self) -> Result<Object<Manager>> {
-        tracing::debug!("waiting for database connection");
-        Ok(self.pool.get().await?)
-    }
 }
 
 impl Db for DbPostgres {
-    async fn blocks(&self) -> Result<impl blocks::DbBlocks> {
-        Ok(blocks::DbBlocksPostgres::new(self.get_connection().await?))
+    async fn blocks(&self) -> Result<impl blocks::BlockDb> {
+        Ok(blocks::BlockDbPostgres::new(&self.sqlx))
     }
 
     async fn ingredient_collections(
