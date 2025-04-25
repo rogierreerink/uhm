@@ -1,7 +1,7 @@
-use crate::db::ingredient_collections::{DbIngredientCollections, IngredientCollectionDataUpdate};
-use crate::db::Db;
+use crate::api::handle_options;
+use crate::db::ingredient_collections::{IngredientCollectionDb, IngredientCollectionUpdate};
+use crate::db::{Db, DbError};
 use crate::global::AppState;
-use crate::{api::handle_options, db::DbError};
 
 use axum::{
     extract::{Path, State},
@@ -48,7 +48,7 @@ pub async fn get_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let mut db_ingredient_collections = match state.db().ingredient_collections().await {
+    let mut db = match state.db().ingredient_collections().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -56,31 +56,31 @@ pub async fn get_resource(
         }
     };
 
-    let collection = match db_ingredient_collections.get_by_id(&id).await {
-        Ok(collection) => collection,
+    let item = match db.get_by_id(&id).await {
+        Ok(block) => block,
         Err(err) => match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
-                tracing::error!("ingredient collection could not be found: {:?}", err);
+                tracing::error!("item could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to get ingredient collection: {:?}", err);
+                tracing::error!("failed to get item: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         },
     };
 
-    Ok((StatusCode::OK, Json(collection)))
+    Ok((StatusCode::OK, Json(item)))
 }
 
 #[axum::debug_handler]
-#[instrument(skip(state, ingredient_collection))]
+#[instrument(skip(state, payload))]
 pub async fn patch_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
-    Json(ingredient_collection): Json<IngredientCollectionDataUpdate>,
+    Json(payload): Json<IngredientCollectionUpdate>,
 ) -> impl IntoResponse {
-    let mut db_ingredient_collections = match state.db().ingredient_collections().await {
+    let mut db = match state.db().ingredient_collections().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -88,24 +88,21 @@ pub async fn patch_resource(
         }
     };
 
-    let collection = match db_ingredient_collections
-        .update(&id, &ingredient_collection)
-        .await
-    {
-        Ok(collection) => collection,
+    let updated = match db.update_by_id(&id, payload).await {
+        Ok(updated) => updated,
         Err(err) => match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
-                tracing::error!("ingredient collection could not be found: {:?}", err);
+                tracing::error!("item could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to update ingredient collection: {:?}", err);
+                tracing::error!("failed to update item: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         },
     };
 
-    Ok((StatusCode::OK, Json(collection)))
+    Ok((StatusCode::OK, Json(updated)))
 }
 
 #[axum::debug_handler]
@@ -114,7 +111,7 @@ pub async fn delete_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let mut db_ingredient_collections = match state.db().ingredient_collections().await {
+    let mut db = match state.db().ingredient_collections().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -122,14 +119,14 @@ pub async fn delete_resource(
         }
     };
 
-    if let Err(err) = db_ingredient_collections.delete(&id).await {
+    if let Err(err) = db.delete_by_id(&id).await {
         match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
-                tracing::error!("ingredient collection could not be found: {:?}", err);
+                tracing::error!("item could not be found: {:?}", err);
                 return Err(StatusCode::NOT_FOUND);
             }
             _ => {
-                tracing::error!("failed to delete ingredient collection: {:?}", err);
+                tracing::error!("failed to delete item: {:?}", err);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }

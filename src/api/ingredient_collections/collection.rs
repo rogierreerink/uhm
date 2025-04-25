@@ -1,7 +1,6 @@
-use crate::db::ingredient_collections::{
-    DbIngredientCollections, IngredientCollectionDataNew, IngredientCollectionMinimal,
-};
+use crate::db::ingredient_collections::{IngredientCollectionCreate, IngredientCollectionDb};
 use crate::global::AppState;
+use crate::utilities::request::collection::{GetResponse, PostRequest, PostResponse};
 use crate::{api::handle_options, db::Db};
 
 use axum::{
@@ -11,7 +10,6 @@ use axum::{
     routing::{get, options, post},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -38,15 +36,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     )
 }
 
-#[derive(Serialize)]
-struct GetResponse {
-    data: Vec<IngredientCollectionMinimal>,
-}
-
 #[axum::debug_handler]
 #[instrument(skip(state))]
 pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut db_ingredient_collections = match state.db().ingredient_collections().await {
+    let mut db = match state.db().ingredient_collections().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -54,34 +47,24 @@ pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResp
         }
     };
 
-    let collections = match db_ingredient_collections.get().await {
-        Ok(collections) => collections,
+    let items = match db.get_multiple().await {
+        Ok(items) => items,
         Err(err) => {
-            tracing::error!("failed to get ingredient collections: {:?}", err);
+            tracing::error!("failed to get items: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
-    Ok((StatusCode::OK, Json(GetResponse { data: collections })))
-}
-
-#[derive(Deserialize)]
-struct PostRequest {
-    data: Vec<IngredientCollectionDataNew>,
-}
-
-#[derive(Serialize)]
-struct PostResponse {
-    data: Vec<IngredientCollectionMinimal>,
+    Ok((StatusCode::OK, Json(GetResponse { data: items })))
 }
 
 #[axum::debug_handler]
-#[instrument(skip(state, ingredient_collection))]
+#[instrument(skip(state, payload))]
 pub async fn post_collection(
     State(state): State<Arc<AppState>>,
-    Json(ingredient_collection): Json<PostRequest>,
+    Json(payload): Json<PostRequest<IngredientCollectionCreate>>,
 ) -> impl IntoResponse {
-    let mut db_ingredient_collections = match state.db().ingredient_collections().await {
+    let mut db = match state.db().ingredient_collections().await {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -89,19 +72,13 @@ pub async fn post_collection(
         }
     };
 
-    let collections = match db_ingredient_collections
-        .create(&ingredient_collection.data)
-        .await
-    {
-        Ok(collections) => collections,
+    let created = match db.create_multiple(payload.data).await {
+        Ok(created) => created,
         Err(err) => {
-            tracing::error!("failed to create ingredient collections: {:?}", err);
+            tracing::error!("failed to create items: {:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
-    Ok((
-        StatusCode::CREATED,
-        Json(PostResponse { data: collections }),
-    ))
+    Ok((StatusCode::CREATED, Json(PostResponse { data: created })))
 }

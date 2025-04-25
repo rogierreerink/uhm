@@ -1,350 +1,219 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use deadpool::managed::Object;
-use deadpool_postgres::Manager;
+use futures_util::{TryFutureExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use tokio_postgres::Row;
+use sqlx::{postgres::PgRow, prelude::FromRow, PgExecutor, PgPool, PgTransaction, Row};
 use uuid::Uuid;
-use variants::variants;
 
-use crate::utilities::{group::GroupIterExt, pack::Pack};
+use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
 
 use super::DbError;
 
 #[trait_variant::make(Send)]
-pub trait DbIngredientCollections {
-    async fn get(&mut self) -> Result<Vec<IngredientCollectionMinimal>>;
+pub trait IngredientCollectionDb {
+    async fn get_multiple(&mut self) -> Result<Vec<IngredientCollection>>;
     async fn get_by_id(&mut self, id: &Uuid) -> Result<IngredientCollection>;
-    async fn create(
+    async fn create_multiple(
         &mut self,
-        ingredient_collections: &Vec<IngredientCollectionDataNew>,
-    ) -> Result<Vec<IngredientCollectionMinimal>>;
-    async fn update(
+        items: Vec<IngredientCollectionCreate>,
+    ) -> Result<Vec<IngredientCollection>>;
+    async fn update_by_id(
         &mut self,
+
         id: &Uuid,
-        ingredient_collection: &IngredientCollectionDataUpdate,
-    ) -> Result<IngredientCollectionMinimal>;
-    async fn delete(&mut self, id: &Uuid) -> Result<()>;
+        item: IngredientCollectionUpdate,
+    ) -> Result<IngredientCollection>;
+    async fn delete_by_id(&mut self, id: &Uuid) -> Result<()>;
 }
 
-#[variants(Minimal)]
-#[derive(Serialize)]
-pub struct IngredientCollection {
-    #[variants(include(Minimal))]
-    pub id: Uuid,
+pub type IngredientCollection = IngredientCollectionTemplate<Query>;
+pub type IngredientCollectionCreate = IngredientCollectionDataTemplate<Create>;
+pub type IngredientCollectionUpdate = IngredientCollectionDataTemplate<Update>;
+pub type IngredientCollectionReference = IngredientCollectionTemplate<Reference>;
 
-    #[variants(include(Minimal))]
-    pub ts_created: DateTime<Utc>,
-
-    #[variants(include(Minimal))]
-    pub ts_updated: Option<DateTime<Utc>>,
-
-    #[variants(include(Minimal), retype = "{t}{v}")]
-    pub data: IngredientCollectionData,
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct IngredientCollectionTemplate<M: Modifier> {
+    pub id: M::Key<Uuid>,
+    #[serde(skip_serializing_if = "M::skip_meta")]
+    pub ts_created: M::Meta<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "M::skip_meta")]
+    pub ts_updated: M::Meta<Option<DateTime<Utc>>>,
+    #[serde(skip_serializing_if = "M::skip_data")]
+    pub data: M::Data<IngredientCollectionDataTemplate<M>>,
 }
 
-#[variants(Minimal)]
-impl From<&Vec<Row>> for Pack<Vec<base!(IngredientCollection)>> {
-    fn from(rows: &Vec<Row>) -> Self {
-        rows.into_iter()
-            .group_map(
-                |row| row.get::<_, Uuid>("id"),
-                |mut group| {
-                    let row = *group.peek().unwrap();
-                    let group = group.collect::<Vec<&Row>>();
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct IngredientCollectionDataTemplate<M: Modifier> {
+    #[serde(skip)]
+    _phantom_data: M::Data<()>,
+}
 
-                    #[variants(include(Minimal), vary_type)]
-                    IngredientCollection {
-                        #[variants(include(Minimal))]
-                        id: row.get("id"),
-
-                        #[variants(include(Minimal))]
-                        ts_created: row.get("ts_created"),
-
-                        #[variants(include(Minimal))]
-                        ts_updated: row.get("ts_updated"),
-
-                        #[variants(include(Minimal))]
-                        data: (&group).into(),
-                    }
-                },
-            )
-            .collect()
+impl FromRow<'_, PgRow> for IngredientCollection {
+    fn from_row(row: &'_ PgRow) -> std::result::Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: row.get("id"),
+            ts_created: row.get("ts_created"),
+            ts_updated: row.get("ts_updated"),
+            data: IngredientCollectionDataTemplate::<Query> { _phantom_data: () },
+        })
     }
 }
 
-#[variants(Minimal, New, Update)]
-#[derive(Serialize, Deserialize)]
-pub struct IngredientCollectionData {
-    ingredients: Vec<Ingredient>,
+pub struct IngredientCollectionDbPostgres<'a> {
+    pool: &'a PgPool,
 }
 
-#[variants(Minimal)]
-impl From<&Vec<&Row>> for IngredientCollectionData {
-    fn from(rows: &Vec<&Row>) -> Self {
-        #[variants(include(Minimal), vary_type)]
-        IngredientCollectionData {
-            ingredients: Pack::from(rows).unpack(),
-        }
+impl<'a> IngredientCollectionDbPostgres<'a> {
+    pub fn new(pool: &'a PgPool) -> Self {
+        Self { pool }
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Ingredient {
-    id: Uuid,
-    data: IngredientData,
-}
+impl IngredientCollectionDb for IngredientCollectionDbPostgres<'_> {
+    async fn get_multiple(&mut self) -> Result<Vec<IngredientCollection>> {
+        let mut conn = self.pool.acquire().await?;
 
-impl From<&Vec<&Row>> for Pack<Vec<Ingredient>> {
-    fn from(rows: &Vec<&Row>) -> Self {
-        rows.into_iter()
-            .filter_map(|row| {
-                row.get::<_, Option<Uuid>>("ingredient_id")
-                    .map(|id| Ingredient {
-                        id,
-                        data: IngredientData::from(*row),
-                    })
-            })
-            .collect()
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct IngredientData {
-    product: Product,
-}
-
-impl From<&Row> for IngredientData {
-    fn from(row: &Row) -> Self {
-        Self {
-            product: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Product {
-    id: Uuid,
-    data: ProductData,
-}
-
-impl From<&Row> for Product {
-    fn from(row: &Row) -> Self {
-        Self {
-            id: row.get("product_id"),
-            data: row.into(),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ProductData {
-    name: String,
-}
-
-impl From<&Row> for ProductData {
-    fn from(row: &Row) -> Self {
-        Self {
-            name: row.get("product_name"),
-        }
-    }
-}
-
-pub struct DbIngredientCollectionsPostgres {
-    connection: Object<Manager>,
-}
-
-impl DbIngredientCollectionsPostgres {
-    pub fn new(connection: Object<Manager>) -> Self {
-        Self { connection }
-    }
-}
-
-impl DbIngredientCollections for DbIngredientCollectionsPostgres {
-    async fn get(&mut self) -> Result<Vec<IngredientCollectionMinimal>> {
-        tracing::debug!("preparing cached statement");
-        let stmt = self
-            .connection
-            .prepare_cached(
-                "
-                SELECT id, ts_created, ts_updated
-                FROM public.ingredient_collections
-                ORDER BY id
-                ",
-            )
-            .await?;
-
-        tracing::debug!("executing query");
-        let collections = Pack::<Vec<IngredientCollectionMinimal>>::from(
-            &self.connection.query(&stmt, &[]).await?,
+        sqlx::query_as(
+            "
+            SELECT id, ts_created, ts_updated
+            FROM public.ingredient_collections
+            ORDER BY id
+            ",
         )
-        .unpack();
-
-        Ok(collections)
+        .fetch(&mut *conn)
+        .try_collect()
+        .map_err(|error| error.into())
+        .await
     }
 
     async fn get_by_id(&mut self, id: &Uuid) -> Result<IngredientCollection> {
-        tracing::debug!("preparing cached statement");
-        let stmt = self
-            .connection
-            .prepare_cached(
-                "
-                SELECT
-                    ingredient_collections.id,
-                    ingredient_collections.ts_created,
-                    ingredient_collections.ts_updated,
-                    ingredients.id AS ingredient_id,
-                    products.id AS product_id,
-                    products.name AS product_name
+        let mut conn = self.pool.acquire().await?;
 
-                FROM public.ingredient_collections
-                    LEFT JOIN public.ingredients
-                        ON ingredient_collections.id = ingredients.ingredient_collection_id
-                    LEFT JOIN public.products
-                        ON ingredients.product_id = products.id
+        Self::get_by_id(&mut *conn, id).await
+    }
 
-                WHERE ingredient_collections.id = $1
-                ORDER BY
-                    ingredient_collections.id,
-                    products.name,
-                    ingredients.id
-                ",
-            )
-            .await?;
+    async fn create_multiple(
+        &mut self,
+        items: Vec<IngredientCollectionCreate>,
+    ) -> Result<Vec<IngredientCollection>> {
+        let mut tx = self.pool.begin().await?;
+        let mut created = Vec::new();
 
-        tracing::debug!("executing query");
-        let collections =
-            Pack::<Vec<IngredientCollection>>::from(&self.connection.query(&stmt, &[id]).await?)
-                .unpack();
-
-        match collections {
-            collections if collections.len() == 0 => Err(DbError::NotFound.into()),
-            collections if collections.len() >= 2 => Err(DbError::TooMany.into()),
-            mut collections => Ok(collections.pop().unwrap()),
+        for item in items {
+            match Self::create(&mut tx, item).await {
+                Ok(item) => created.push(item),
+                Err(error) => {
+                    tx.commit().await?;
+                    return Err(error.into());
+                }
+            };
         }
+
+        tx.commit().await?;
+
+        Ok(created)
+    }
+
+    async fn update_by_id(
+        &mut self,
+        id: &Uuid,
+        item: IngredientCollectionUpdate,
+    ) -> Result<IngredientCollection> {
+        let mut tx = self.pool.begin().await?;
+
+        let updated = match Self::update_by_id(&mut tx, id, item).await {
+            Ok(item) => item,
+            Err(error) => {
+                tx.commit().await?;
+                return Err(error.into());
+            }
+        };
+
+        tx.commit().await?;
+
+        Ok(updated)
+    }
+
+    async fn delete_by_id(&mut self, id: &Uuid) -> Result<()> {
+        let mut conn = self.pool.acquire().await?;
+
+        if sqlx::query(
+            "
+            DELETE FROM public.ingredient_collections
+            WHERE id = $1
+            ",
+        )
+        .bind(id)
+        .execute(&mut *conn)
+        .await?
+        .rows_affected()
+            == 0
+        {
+            return Err((DbError::NotFound).into());
+        }
+
+        Ok(())
+    }
+}
+
+impl IngredientCollectionDbPostgres<'_> {
+    async fn get_by_id<'c, E>(executor: E, id: &Uuid) -> Result<IngredientCollection>
+    where
+        E: PgExecutor<'c>,
+    {
+        sqlx::query_as(
+            "
+            SELECT id, ts_created, ts_updated
+            FROM public.ingredient_collections
+            WHERE id = $1
+            ORDER BY id
+            ",
+        )
+        .bind(id)
+        .fetch_one(executor)
+        .map_err(|error| match error {
+            sqlx::Error::RowNotFound => Into::<anyhow::Error>::into(DbError::NotFound),
+            _ => error.into(),
+        })
+        .await
     }
 
     async fn create(
-        &mut self,
-        ingredient_collections: &Vec<IngredientCollectionDataNew>,
-    ) -> Result<Vec<IngredientCollectionMinimal>> {
-        tracing::debug!("starting database transaction");
-        let transaction = self.connection.transaction().await?;
+        tx: &mut PgTransaction<'_>,
+        _item: IngredientCollectionCreate,
+    ) -> Result<IngredientCollection> {
+        let item_id = Uuid::new_v4();
+        let item = sqlx::query_as(
+            "
+            INSERT INTO public.ingredient_collections (id)
+            VALUES ($1)
+            RETURNING id, ts_created, ts_updated
+            ",
+        )
+        .bind(item_id)
+        .fetch_one(&mut **tx)
+        .await?;
 
-        let mut inserted = Vec::new();
-        for _ in ingredient_collections {
-            let ingredient_collection_id = Uuid::new_v4();
-
-            tracing::debug!("preparing cached statement");
-            let stmt = transaction
-                .prepare_cached(
-                    "
-                    INSERT INTO public.ingredient_collections (id)
-                    VALUES ($1)
-                    RETURNING ts_created
-                    ",
-                )
-                .await?;
-
-            tracing::debug!("executing query");
-            let row = transaction
-                .query_one(&stmt, &[&ingredient_collection_id])
-                .await?;
-
-            inserted.push(IngredientCollectionMinimal {
-                id: ingredient_collection_id,
-                ts_created: row.get("ts_created"),
-                ts_updated: None,
-                data: IngredientCollectionDataMinimal {},
-            });
-        }
-
-        tracing::debug!("committing database transaction");
-        transaction.commit().await?;
-
-        Ok(inserted)
+        Ok(item)
     }
 
-    async fn update(
-        &mut self,
+    async fn update_by_id(
+        tx: &mut PgTransaction<'_>,
         id: &Uuid,
-        _: &IngredientCollectionDataUpdate,
-    ) -> Result<IngredientCollectionMinimal> {
-        tracing::debug!("starting database transaction");
-        let transaction = self.connection.transaction().await?;
+        _item: IngredientCollectionUpdate,
+    ) -> Result<IngredientCollection> {
+        let updated = sqlx::query_as(
+            "
+            UPDATE public.ingredient_collections
+            SET ts_updated = NOW()
+            WHERE id = $1
+            RETURNING id, ts_created, ts_updated
+            ",
+        )
+        .bind(id)
+        .fetch_one(&mut **tx)
+        .await?;
 
-        tracing::debug!("get current: preparing cached statement");
-        let stmt = transaction
-            .prepare_cached(
-                "
-                SELECT id, ts_created, ts_updated
-                FROM public.ingredient_collections
-                WHERE id = $1
-                ",
-            )
-            .await?;
-
-        tracing::debug!("get current: executing query");
-        let current = match transaction.query(&stmt, &[id]).await? {
-            rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
-            rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
-            mut rows => rows.pop().unwrap(),
-        };
-
-        tracing::debug!("update: executing query");
-        let stmt = transaction
-            .prepare_cached(
-                "
-                UPDATE public.ingredient_collections
-                SET ts_updated = CURRENT_TIMESTAMP
-                WHERE id = $1
-                RETURNING ts_updated
-                ",
-            )
-            .await?;
-
-        tracing::debug!("update: executing query");
-        let updated = match transaction.query(&stmt, &[id]).await? {
-            rows if rows.len() == 0 => return Err(DbError::NotFound.into()),
-            rows if rows.len() >= 2 => return Err(DbError::TooMany.into()),
-            mut rows => rows.pop().unwrap(),
-        };
-
-        tracing::debug!("committing database transaction");
-        transaction.commit().await?;
-
-        Ok(IngredientCollectionMinimal {
-            id: *id,
-            ts_created: current.get("ts_created"),
-            ts_updated: updated.get("ts_updated"),
-            data: IngredientCollectionDataMinimal {},
-        })
-    }
-
-    async fn delete(&mut self, id: &Uuid) -> Result<()> {
-        tracing::debug!("starting database transaction");
-        let transaction = self.connection.transaction().await?;
-
-        tracing::debug!("preparing cached statement");
-        let stmt = transaction
-            .prepare_cached(
-                "
-                DELETE FROM public.ingredient_collections
-                WHERE id = $1
-                ",
-            )
-            .await?;
-
-        tracing::debug!("executing query");
-        match transaction.execute(&stmt, &[id]).await? {
-            rows if rows == 0 => return Err(DbError::NotFound.into()),
-            rows if rows >= 2 => return Err(DbError::TooMany.into()),
-            _ => (),
-        };
-
-        tracing::debug!("committing database transaction");
-        transaction.commit().await?;
-
-        Ok(())
+        Ok(updated)
     }
 }

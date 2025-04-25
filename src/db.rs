@@ -18,7 +18,7 @@ pub trait Db {
     async fn blocks(&self) -> Result<impl blocks::DbBlocks>;
     async fn ingredient_collections(
         &self,
-    ) -> Result<impl ingredient_collections::DbIngredientCollections>;
+    ) -> Result<impl ingredient_collections::IngredientCollectionDb>;
     async fn ingredients(&self) -> Result<impl ingredients::IngredientDb>;
     async fn list_items(&self) -> Result<impl list_items::ListItemDb>;
     async fn paragraphs(&self) -> Result<impl paragraphs::ParagraphDb>;
@@ -45,14 +45,13 @@ impl Db for DbPostgres {
     async fn blocks(&self) -> Result<impl blocks::DbBlocks> {
         Ok(blocks::DbBlocksPostgres::new(self.get_connection().await?))
     }
+
     async fn ingredient_collections(
         &self,
-    ) -> Result<impl ingredient_collections::DbIngredientCollections> {
-        Ok(
-            ingredient_collections::DbIngredientCollectionsPostgres::new(
-                self.get_connection().await?,
-            ),
-        )
+    ) -> Result<impl ingredient_collections::IngredientCollectionDb> {
+        Ok(ingredient_collections::IngredientCollectionDbPostgres::new(
+            &self.sqlx,
+        ))
     }
 
     async fn ingredients(&self) -> Result<impl ingredients::IngredientDb> {
