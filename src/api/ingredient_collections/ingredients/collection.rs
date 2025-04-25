@@ -44,13 +44,7 @@ pub async fn get_collection(
     State(state): State<Arc<AppState>>,
     Path(collection_id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().ingredients() {
-        Ok(db) => db,
-        Err(err) => {
-            tracing::error!("failed to connect to database: {:?}", err);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let mut db = state.db().ingredients();
 
     let items = match db.get_multiple(&collection_id).await {
         Ok(items) => items,
@@ -70,13 +64,7 @@ pub async fn post_collection(
     Path(collection_id): Path<Uuid>,
     Json(payload): Json<PostRequest<IngredientCreate>>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().ingredients() {
-        Ok(db) => db,
-        Err(err) => {
-            tracing::error!("failed to connect to database: {:?}", err);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let mut db = state.db().ingredients();
 
     let created = match db.create_multiple(&collection_id, payload.data).await {
         Ok(created) => created,

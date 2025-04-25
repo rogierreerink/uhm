@@ -1,13 +1,12 @@
 use std::error::Error;
 use std::fmt::{Debug, Display};
 
-use anyhow::Result;
-use blocks::BlockDb;
-use ingredient_collections::IngredientCollectionDb;
-use ingredients::IngredientDb;
-use list_items::ListItemDb;
-use markdown::MarkdownDb;
-use products::ProductDb;
+use blocks::{BlockDb, BlockDbPostgres};
+use ingredient_collections::{IngredientCollectionDb, IngredientCollectionDbPostgres};
+use ingredients::{IngredientDb, IngredientDbPostgres};
+use list_items::{ListItemDb, ListItemDbPostgres};
+use markdown::{MarkdownDb, MarkdownDbPostgres};
+use products::{ProductDb, ProductDbPostgres};
 use sqlx::PgPool;
 
 pub mod blocks;
@@ -18,12 +17,12 @@ pub mod markdown;
 pub mod products;
 
 pub trait Db {
-    fn blocks(&self) -> Result<impl BlockDb>;
-    fn ingredient_collections(&self) -> Result<impl IngredientCollectionDb>;
-    fn ingredients(&self) -> Result<impl IngredientDb>;
-    fn list_items(&self) -> Result<impl ListItemDb>;
-    fn markdown(&self) -> Result<impl MarkdownDb>;
-    fn products(&self) -> Result<impl ProductDb>;
+    fn blocks(&self) -> impl BlockDb;
+    fn ingredient_collections(&self) -> impl IngredientCollectionDb;
+    fn ingredients(&self) -> impl IngredientDb;
+    fn list_items(&self) -> impl ListItemDb;
+    fn markdown(&self) -> impl MarkdownDb;
+    fn products(&self) -> impl ProductDb;
 }
 
 pub struct DbPostgres {
@@ -37,30 +36,28 @@ impl DbPostgres {
 }
 
 impl Db for DbPostgres {
-    fn blocks(&self) -> Result<impl BlockDb> {
-        Ok(blocks::BlockDbPostgres::new(&self.sqlx))
+    fn blocks(&self) -> impl BlockDb {
+        BlockDbPostgres::new(&self.sqlx)
     }
 
-    fn ingredient_collections(&self) -> Result<impl IngredientCollectionDb> {
-        Ok(ingredient_collections::IngredientCollectionDbPostgres::new(
-            &self.sqlx,
-        ))
+    fn ingredient_collections(&self) -> impl IngredientCollectionDb {
+        IngredientCollectionDbPostgres::new(&self.sqlx)
     }
 
-    fn ingredients(&self) -> Result<impl IngredientDb> {
-        Ok(ingredients::IngredientDbPostgres::new(&self.sqlx))
+    fn ingredients(&self) -> impl IngredientDb {
+        IngredientDbPostgres::new(&self.sqlx)
     }
 
-    fn list_items(&self) -> Result<impl ListItemDb> {
-        Ok(list_items::ListItemDbPostgres::new(&self.sqlx))
+    fn list_items(&self) -> impl ListItemDb {
+        ListItemDbPostgres::new(&self.sqlx)
     }
 
-    fn markdown(&self) -> Result<impl MarkdownDb> {
-        Ok(markdown::MarkdownDbPostgres::new(&self.sqlx))
+    fn markdown(&self) -> impl MarkdownDb {
+        MarkdownDbPostgres::new(&self.sqlx)
     }
 
-    fn products(&self) -> Result<impl ProductDb> {
-        Ok(products::ProductDbPostgres::new(&self.sqlx))
+    fn products(&self) -> impl ProductDb {
+        ProductDbPostgres::new(&self.sqlx)
     }
 }
 

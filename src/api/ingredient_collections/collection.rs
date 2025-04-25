@@ -39,13 +39,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 #[axum::debug_handler]
 #[instrument(skip(state))]
 pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut db = match state.db().ingredient_collections() {
-        Ok(db) => db,
-        Err(err) => {
-            tracing::error!("failed to connect to database: {:?}", err);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let mut db = state.db().ingredient_collections();
 
     let items = match db.get_multiple().await {
         Ok(items) => items,
@@ -64,13 +58,7 @@ pub async fn post_collection(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<PostRequest<IngredientCollectionCreate>>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().ingredient_collections() {
-        Ok(db) => db,
-        Err(err) => {
-            tracing::error!("failed to connect to database: {:?}", err);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let mut db = state.db().ingredient_collections();
 
     let created = match db.create_multiple(payload.data).await {
         Ok(created) => created,

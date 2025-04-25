@@ -42,13 +42,7 @@ pub async fn get_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().list_items() {
-        Ok(db) => db,
-        Err(err) => {
-            tracing::error!("failed to connect to database: {:?}", err);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let mut db = state.db().list_items();
 
     let item = match db.get_by_id(&id).await {
         Ok(block) => block,
@@ -74,13 +68,7 @@ pub async fn patch_resource(
     Path(id): Path<Uuid>,
     Json(payload): Json<ListItemUpdate>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().list_items() {
-        Ok(db) => db,
-        Err(err) => {
-            tracing::error!("failed to connect to database: {:?}", err);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let mut db = state.db().list_items();
 
     let updated = match db.update_by_id(&id, payload).await {
         Ok(updated) => updated,
@@ -105,13 +93,7 @@ pub async fn delete_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().list_items() {
-        Ok(db) => db,
-        Err(err) => {
-            tracing::error!("failed to connect to database: {:?}", err);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let mut db = state.db().list_items();
 
     if let Err(err) = db.delete_by_id(&id).await {
         match err.downcast_ref::<DbError>() {
