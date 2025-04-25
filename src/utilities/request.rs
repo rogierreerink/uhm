@@ -15,4 +15,11 @@ pub mod collection {
     pub struct PostResponse<T> {
         pub data: Vec<T>,
     }
+
+    #[derive(Serialize)]
+    pub struct Pagination {
+        pub skip: usize,
+        pub take: usize,
+        pub total: usize,
+    }
 }

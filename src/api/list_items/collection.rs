@@ -39,7 +39,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 #[axum::debug_handler]
 #[instrument(skip(state))]
 pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut db = match state.db().list_items().await {
+    let mut db = match state.db().list_items() {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -64,7 +64,7 @@ pub async fn post_collection(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<PostRequest<ListItemCreate>>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().list_items().await {
+    let mut db = match state.db().list_items() {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);

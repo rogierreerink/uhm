@@ -1,6 +1,5 @@
 use crate::global::AppState;
 use axum::Router;
-use serde::Serialize;
 use std::sync::Arc;
 
 mod blocks;
@@ -22,10 +21,3 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 }
 
 pub async fn handle_options() {}
-
-#[derive(Serialize)]
-pub struct Pagination {
-    pub skip: usize,
-    pub take: usize,
-    pub total: usize,
-}

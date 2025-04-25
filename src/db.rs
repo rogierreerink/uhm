@@ -17,14 +17,13 @@ pub mod list_items;
 pub mod markdown;
 pub mod products;
 
-#[trait_variant::make(Send)]
 pub trait Db {
-    async fn blocks(&self) -> Result<impl BlockDb>;
-    async fn ingredient_collections(&self) -> Result<impl IngredientCollectionDb>;
-    async fn ingredients(&self) -> Result<impl IngredientDb>;
-    async fn list_items(&self) -> Result<impl ListItemDb>;
-    async fn markdown(&self) -> Result<impl MarkdownDb>;
-    async fn products(&self) -> Result<impl ProductDb>;
+    fn blocks(&self) -> Result<impl BlockDb>;
+    fn ingredient_collections(&self) -> Result<impl IngredientCollectionDb>;
+    fn ingredients(&self) -> Result<impl IngredientDb>;
+    fn list_items(&self) -> Result<impl ListItemDb>;
+    fn markdown(&self) -> Result<impl MarkdownDb>;
+    fn products(&self) -> Result<impl ProductDb>;
 }
 
 pub struct DbPostgres {
@@ -38,29 +37,29 @@ impl DbPostgres {
 }
 
 impl Db for DbPostgres {
-    async fn blocks(&self) -> Result<impl BlockDb> {
+    fn blocks(&self) -> Result<impl BlockDb> {
         Ok(blocks::BlockDbPostgres::new(&self.sqlx))
     }
 
-    async fn ingredient_collections(&self) -> Result<impl IngredientCollectionDb> {
+    fn ingredient_collections(&self) -> Result<impl IngredientCollectionDb> {
         Ok(ingredient_collections::IngredientCollectionDbPostgres::new(
             &self.sqlx,
         ))
     }
 
-    async fn ingredients(&self) -> Result<impl IngredientDb> {
+    fn ingredients(&self) -> Result<impl IngredientDb> {
         Ok(ingredients::IngredientDbPostgres::new(&self.sqlx))
     }
 
-    async fn list_items(&self) -> Result<impl ListItemDb> {
+    fn list_items(&self) -> Result<impl ListItemDb> {
         Ok(list_items::ListItemDbPostgres::new(&self.sqlx))
     }
 
-    async fn markdown(&self) -> Result<impl MarkdownDb> {
+    fn markdown(&self) -> Result<impl MarkdownDb> {
         Ok(markdown::MarkdownDbPostgres::new(&self.sqlx))
     }
 
-    async fn products(&self) -> Result<impl ProductDb> {
+    fn products(&self) -> Result<impl ProductDb> {
         Ok(products::ProductDbPostgres::new(&self.sqlx))
     }
 }

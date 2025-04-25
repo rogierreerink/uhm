@@ -42,7 +42,7 @@ pub async fn get_resource(
     State(state): State<Arc<AppState>>,
     Path((collection_id, id)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().ingredients().await {
+    let mut db = match state.db().ingredients() {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -74,7 +74,7 @@ pub async fn patch_resource(
     Path((collection_id, id)): Path<(Uuid, Uuid)>,
     Json(payload): Json<IngredientUpdate>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().ingredients().await {
+    let mut db = match state.db().ingredients() {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);
@@ -105,7 +105,7 @@ pub async fn delete_resource(
     State(state): State<Arc<AppState>>,
     Path((collection_id, id)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
-    let mut db = match state.db().ingredients().await {
+    let mut db = match state.db().ingredients() {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("failed to connect to database: {:?}", err);

@@ -27,7 +27,6 @@ pub trait IngredientCollectionDb {
     ) -> Result<Vec<IngredientCollection>>;
     async fn update_by_id(
         &mut self,
-
         id: &Uuid,
         item: IngredientCollectionUpdate,
     ) -> Result<IngredientCollection>;

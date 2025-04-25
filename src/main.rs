@@ -26,7 +26,6 @@ async fn main() {
         .with(tracing_filter)
         .with(fmt::layer())
         .init();
-
     tracing::info!("starting application");
 
     tracing::info!("creating database pool");
