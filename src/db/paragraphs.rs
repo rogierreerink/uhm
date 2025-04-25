@@ -26,8 +26,11 @@ pub type ParagraphReference = ParagraphTemplate<Reference>;
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct ParagraphTemplate<M: Modifier> {
     pub id: M::Key<Uuid>,
+    #[serde(skip_serializing_if = "M::skip_meta")]
     pub ts_created: M::Meta<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "M::skip_meta")]
     pub ts_updated: M::Meta<Option<DateTime<Utc>>>,
+    #[serde(skip_serializing_if = "M::skip_data")]
     pub data: M::Data<ParagraphDataTemplate<M>>,
 }
 

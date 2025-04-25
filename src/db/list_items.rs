@@ -29,8 +29,11 @@ pub type ListItemReference = ListItemTemplate<Reference>;
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct ListItemTemplate<M: Modifier> {
     pub id: M::Key<Uuid>,
+    #[serde(skip_serializing_if = "M::skip_meta")]
     pub ts_created: M::Meta<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "M::skip_meta")]
     pub ts_updated: M::Meta<Option<DateTime<Utc>>>,
+    #[serde(skip_serializing_if = "M::skip_data")]
     pub data: M::Data<ListItemDataTemplate<M>>,
 }
 
@@ -81,8 +84,8 @@ impl FromRow<'_, PgRow> for ListItem {
                             link_id: id,
                             product: ProductReference {
                                 id: row.get("product_id"),
-                                data: Some(ProductDataTemplate::<Reference> {
-                                    name: row.get("product_name"),
+                                data: Some(ProductDataTemplate {
+                                    name: Some(row.get("product_name")),
                                     ..Default::default()
                                 }),
                                 ..Default::default()

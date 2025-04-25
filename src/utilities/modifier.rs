@@ -4,6 +4,13 @@ pub trait Modifier {
     type Key<T>;
     type Meta<T>;
     type Data<T>;
+
+    fn skip_meta<T>(_: &Self::Meta<T>) -> bool {
+        false
+    }
+    fn skip_data<T>(_: &Self::Data<T>) -> bool {
+        false
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -40,4 +47,11 @@ impl Modifier for Reference {
     type Key<T> = T;
     type Meta<T> = Option<T>;
     type Data<T> = Option<T>;
+
+    fn skip_meta<T>(value: &Self::Meta<T>) -> bool {
+        value.is_none()
+    }
+    fn skip_data<T>(value: &Self::Data<T>) -> bool {
+        value.is_none()
+    }
 }

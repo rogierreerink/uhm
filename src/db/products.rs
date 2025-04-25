@@ -26,13 +26,17 @@ pub type ProductReference = ProductTemplate<Reference>;
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct ProductTemplate<M: Modifier> {
     pub id: M::Key<Uuid>,
+    #[serde(skip_serializing_if = "M::skip_meta")]
     pub ts_created: M::Meta<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "M::skip_meta")]
     pub ts_updated: M::Meta<Option<DateTime<Utc>>>,
+    #[serde(skip_serializing_if = "M::skip_data")]
     pub data: M::Data<ProductDataTemplate<M>>,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct ProductDataTemplate<M: Modifier> {
+    #[serde(skip_serializing_if = "M::skip_data")]
     pub name: M::Data<String>,
 }
 
