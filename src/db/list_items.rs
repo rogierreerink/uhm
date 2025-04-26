@@ -433,16 +433,19 @@ impl ListItemDbPostgres<'_> {
             },
         };
 
-        sqlx::query(
+        let row = sqlx::query(
             "
              UPDATE public.list_items
              SET ts_updated = NOW()
              WHERE id = $1
+             RETURNING ts_updated
              ",
         )
         .bind(id)
-        .execute(&mut **tx)
+        .fetch_one(&mut **tx)
         .await?;
+
+        item.ts_updated = row.get("ts_updated");
 
         Ok(item)
     }

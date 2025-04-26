@@ -21,6 +21,7 @@ DO $$ BEGIN
         ADD IF NOT EXISTS page_id UUID NOT NULL REFERENCES public.pages (id)
             ON DELETE CASCADE,
         ADD IF NOT EXISTS block_id UUID REFERENCES public.blocks (id)
-            ON DELETE CASCADE;
+            ON DELETE CASCADE,
+        ADD IF NOt EXISTS sequence_number INTEGER NOT NULL;
 
 END $$

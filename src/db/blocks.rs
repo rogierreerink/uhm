@@ -40,6 +40,7 @@ pub struct BlockTemplate<M: Modifier> {
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct BlockDataTemplate<M: Modifier> {
+    #[serde(skip_serializing_if = "M::skip_data")]
     pub kind: M::Data<BlockKindTemplate<M>>,
 }
 
@@ -415,7 +416,7 @@ impl BlockDbPostgres<'_> {
             },
         };
 
-        sqlx::query(
+        let row = sqlx::query(
             "
              UPDATE public.blocks
              SET ts_updated = NOW()
@@ -423,8 +424,10 @@ impl BlockDbPostgres<'_> {
              ",
         )
         .bind(id)
-        .execute(&mut **tx)
+        .fetch_one(&mut **tx)
         .await?;
+
+        item.ts_updated = row.get("ts_updated");
 
         Ok(item)
     }

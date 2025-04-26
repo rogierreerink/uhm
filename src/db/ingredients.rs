@@ -58,7 +58,7 @@ impl FromRow<'_, PgRow> for Ingredient {
             id: row.get("id"),
             ts_created: row.get("ts_created"),
             ts_updated: row.get("ts_updated"),
-            data: IngredientDataTemplate::<Query> {
+            data: IngredientDataTemplate {
                 product: ProductReference {
                     id: row.get("product_id"),
                     data: Some(ProductDataTemplate {
@@ -261,22 +261,24 @@ impl IngredientDbPostgres<'_> {
             item.data.product.id = product.id;
         }
 
-        let _ = sqlx::query(
+        let row = sqlx::query(
             "
             UPDATE public.ingredients
             SET product_id = $3,
                 ts_updated = NOW()
             WHERE ingredient_collection_id = $1 AND id = $2
+            RETURNING ts_updated
             ",
         )
         .bind(collection_id)
         .bind(id)
         .bind(item.id)
-        .execute(&mut **tx)
+        .fetch_one(&mut **tx)
         .await?;
 
         // Product data might have been invalidated, just leave it out
         item.data.product.data = None;
+        item.ts_updated = row.get("ts_updated");
 
         Ok(item)
     }

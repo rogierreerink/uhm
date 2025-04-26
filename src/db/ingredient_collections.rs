@@ -62,7 +62,7 @@ impl FromRow<'_, PgRow> for IngredientCollection {
             id: row.get("id"),
             ts_created: row.get("ts_created"),
             ts_updated: row.get("ts_updated"),
-            data: IngredientCollectionDataTemplate::<Query> {
+            data: IngredientCollectionDataTemplate {
                 ingredients: Vec::new(),
             },
         })

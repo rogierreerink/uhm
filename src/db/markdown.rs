@@ -45,7 +45,7 @@ impl FromRow<'_, PgRow> for Markdown {
             id: row.get("id"),
             ts_created: row.get("ts_created"),
             ts_updated: row.get("ts_updated"),
-            data: MarkdownDataTemplate::<Query> {
+            data: MarkdownDataTemplate {
                 markdown: row.get("markdown"),
             },
         })
@@ -184,19 +184,21 @@ impl MarkdownDbPostgres<'_> {
             item.data.markdown = markdown;
         }
 
-        sqlx::query(
+        let row = sqlx::query(
             "
             UPDATE public.markdown
             SET markdown = $2,
                 ts_updated = NOW()
             WHERE id = $1
-            RETURNING id, ts_created, ts_updated, markdown
+            RETURNING ts_updated
             ",
         )
         .bind(id)
         .bind(item.data.markdown.clone())
-        .execute(&mut **tx)
+        .fetch_one(&mut **tx)
         .await?;
+
+        item.ts_updated = row.get("ts_updated");
 
         Ok(item)
     }

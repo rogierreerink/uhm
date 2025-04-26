@@ -46,7 +46,7 @@ impl FromRow<'_, PgRow> for Product {
             id: row.get("id"),
             ts_created: row.get("ts_created"),
             ts_updated: row.get("ts_updated"),
-            data: ProductDataTemplate::<Query> {
+            data: ProductDataTemplate {
                 name: row.get("name"),
             },
         })
@@ -185,19 +185,21 @@ impl ProductDbPostgres<'_> {
             item.data.name = name;
         }
 
-        sqlx::query(
+        let row = sqlx::query(
             "
             UPDATE public.products
             SET name = $2,
                 ts_updated = NOW()
             WHERE id = $1
-            RETURNING id, ts_created, ts_updated, name
+            RETURNING ts_updated
             ",
         )
         .bind(id)
         .bind(item.data.name.clone())
-        .execute(&mut **tx)
+        .fetch_one(&mut **tx)
         .await?;
+
+        item.ts_updated = row.get("ts_updated");
 
         Ok(item)
     }
