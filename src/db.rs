@@ -6,6 +6,7 @@ use ingredient_collections::{IngredientCollectionDb, IngredientCollectionDbPostg
 use ingredients::{IngredientDb, IngredientDbPostgres};
 use list_items::{ListItemDb, ListItemDbPostgres};
 use markdown::{MarkdownDb, MarkdownDbPostgres};
+use pages::{PageDb, PageDbPostgres};
 use products::{ProductDb, ProductDbPostgres};
 use sqlx::PgPool;
 
@@ -14,6 +15,7 @@ pub mod ingredient_collections;
 pub mod ingredients;
 pub mod list_items;
 pub mod markdown;
+pub mod pages;
 pub mod products;
 
 pub trait Db {
@@ -22,6 +24,7 @@ pub trait Db {
     fn ingredients(&self) -> impl IngredientDb;
     fn list_items(&self) -> impl ListItemDb;
     fn markdown(&self) -> impl MarkdownDb;
+    fn pages(&self) -> impl PageDb;
     fn products(&self) -> impl ProductDb;
 }
 
@@ -54,6 +57,10 @@ impl Db for DbPostgres {
 
     fn markdown(&self) -> impl MarkdownDb {
         MarkdownDbPostgres::new(&self.sqlx)
+    }
+
+    fn pages(&self) -> impl PageDb {
+        PageDbPostgres::new(&self.sqlx)
     }
 
     fn products(&self) -> impl ProductDb {

@@ -6,6 +6,7 @@ mod blocks;
 mod ingredient_collections;
 mod list_items;
 mod markdown;
+mod pages;
 mod products;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
@@ -17,6 +18,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         )
         .nest("/list-items", list_items::create_router(state.clone()))
         .nest("/markdown", markdown::create_router(state.clone()))
+        .nest("/pages", pages::create_router(state.clone()))
         .nest("/products", products::create_router(state.clone()))
 }
 
