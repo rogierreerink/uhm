@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgRow, prelude::FromRow, PgExecutor, PgPool, PgTransaction, Row};
 use uuid::Uuid;
 
-use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
+use crate::utilities::{
+    markdown::markdown_to_html,
+    modifier::{Create, Modifier, Query, Reference, Update},
+};
 
 use super::DbError;
 
@@ -36,7 +39,11 @@ pub struct MarkdownTemplate<M: Modifier> {
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct MarkdownDataTemplate<M: Modifier> {
+    #[serde(skip_serializing_if = "M::skip_data")]
     pub markdown: M::Data<String>,
+    #[serde(skip_deserializing)]
+    #[serde(skip_serializing_if = "M::skip_readonly")]
+    pub html: M::ReadOnly<String>,
 }
 
 impl FromRow<'_, PgRow> for Markdown {
@@ -45,8 +52,10 @@ impl FromRow<'_, PgRow> for Markdown {
             id: row.get("id"),
             ts_created: row.get("ts_created"),
             ts_updated: row.get("ts_updated"),
-            data: MarkdownDataTemplate {
-                markdown: row.get("markdown"),
+            data: {
+                let markdown = row.get::<String, _>("markdown");
+                let html = markdown_to_html(&markdown);
+                MarkdownDataTemplate { markdown, html }
             },
         })
     }

@@ -2,10 +2,7 @@ use crate::api::handle_options;
 use crate::db::markdown::{MarkdownDb, MarkdownUpdate};
 use crate::db::{Db, DbError};
 use crate::global::AppState;
-use crate::utilities::markdown::markdown_to_html;
 
-use axum::http::HeaderMap;
-use axum::response::Html;
 use axum::{
     extract::{Path, State},
     http::{header, HeaderValue, StatusCode},
@@ -44,7 +41,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 pub async fn get_resource(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
-    headers: HeaderMap,
 ) -> impl IntoResponse {
     let mut db = state.db().markdown();
 
@@ -62,12 +58,7 @@ pub async fn get_resource(
         },
     };
 
-    let response = match headers.get("accept") {
-        Some(x) if x == "text/html" => Html(markdown_to_html(&item.data.markdown)).into_response(),
-        _ => Json(item).into_response(),
-    };
-
-    Ok((StatusCode::OK, response))
+    Ok((StatusCode::OK, Json(item)))
 }
 
 #[axum::debug_handler]

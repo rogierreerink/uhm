@@ -9,7 +9,10 @@ use uuid::Uuid;
 
 use crate::{
     db::blocks::BlockTemplate,
-    utilities::modifier::{Create, Modifier, Query, Reference, Update},
+    utilities::{
+        markdown::markdown_to_html,
+        modifier::{Create, Modifier, Query, Reference, Update},
+    },
 };
 
 use super::{
@@ -219,9 +222,14 @@ impl Page {
     ) -> Result<MarkdownReference> {
         Ok(MarkdownReference {
             id: first.get("markdown_id"),
-            data: Some(MarkdownDataTemplate {
-                markdown: Some(first.get("markdown")),
-                ..Default::default()
+            data: Some({
+                let markdown = first.get::<String, _>("markdown");
+                let html = markdown_to_html(&markdown);
+                MarkdownDataTemplate {
+                    markdown: Some(markdown),
+                    html: Some(html),
+                    ..Default::default()
+                }
             }),
             ..Default::default()
         })
