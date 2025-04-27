@@ -48,7 +48,9 @@ pub struct ListItemTemplate<M: Modifier> {
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct ListItemDataTemplate<M: Modifier> {
+    #[serde(skip_serializing_if = "M::skip_data")]
     pub checked: M::Data<bool>,
+    #[serde(skip_serializing_if = "M::skip_data")]
     pub kind: M::Data<ListItemKindTemplate<M>>,
 }
 
@@ -136,9 +138,9 @@ impl ListItemDb for ListItemDbPostgres<'_> {
             "
             SELECT
                 list_items.id,
-                list_items.checked,
                 list_items.ts_created,
                 list_items.ts_updated,
+                list_items.checked,
                 product_list_items.id AS product_list_item_id,
                 products.id AS product_id,
                 products.name AS product_name,
@@ -155,10 +157,7 @@ impl ListItemDb for ListItemDbPostgres<'_> {
 
             WHERE list_items.list_id = $1
             ORDER BY
-                CASE
-                    WHEN product_list_items.id IS NOT NULL THEN products.name
-                    WHEN temporary_list_items.id IS NOT NULL THEN temporary_list_items.name
-                END,
+                COALESCE(products.name, temporary_list_items.name),
                 list_items.id
             ",
         )
@@ -245,9 +244,9 @@ impl ListItemDbPostgres<'_> {
             "
             SELECT
                 list_items.id,
-                list_items.checked,
                 list_items.ts_created,
                 list_items.ts_updated,
+                list_items.checked,
                 product_list_items.id AS product_list_item_id,
                 products.id AS product_id,
                 products.name AS product_name,
@@ -267,10 +266,7 @@ impl ListItemDbPostgres<'_> {
                 list_items.id = $2
 
             ORDER BY
-                CASE
-                    WHEN product_list_items.id IS NOT NULL THEN products.name
-                    WHEN temporary_list_items.id IS NOT NULL THEN temporary_list_items.name
-                END,
+                COALESCE(products.name, temporary_list_items.name),
                 list_items.id
             ",
         )

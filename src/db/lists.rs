@@ -9,7 +9,14 @@ use uuid::Uuid;
 
 use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
 
-use super::DbError;
+use super::{
+    list_items::{
+        ListItemDataTemplate, ListItemKindTemplate, ListItemReference,
+        TemporaryListItemDataTemplate, TemporaryListItemTemplate,
+    },
+    products::{ProductDataTemplate, ProductReference},
+    DbError,
+};
 
 #[trait_variant::make(Send)]
 pub trait ListDb {
@@ -40,6 +47,15 @@ pub struct ListTemplate<M: Modifier> {
 pub struct ListDataTemplate<M: Modifier> {
     #[serde(skip_serializing_if = "M::skip_data")]
     pub name: M::Data<String>,
+    #[serde(flatten)]
+    #[serde(skip_serializing_if = "M::skip_data")]
+    pub item_refs: M::Data<ListItemReferences<Reference>>,
+}
+
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct ListItemReferences<M: Modifier> {
+    #[serde(skip_serializing_if = "M::skip_data")]
+    pub items: M::Data<Vec<ListItemReference>>,
 }
 
 impl FromRow<'_, PgRow> for List {
@@ -50,6 +66,7 @@ impl FromRow<'_, PgRow> for List {
             ts_updated: row.get("ts_updated"),
             data: ListDataTemplate {
                 name: row.get("name"),
+                item_refs: ListItemReferences { items: None },
             },
         })
     }
@@ -68,6 +85,7 @@ macro_rules! next_matches_first {
 impl List {
     async fn collect_lists(
         stream: impl Stream<Item = Result<PgRow, sqlx::Error>>,
+        summary: bool,
     ) -> Result<Vec<List>> {
         let mut stream = std::pin::pin!(stream.peekable());
         let mut items = Vec::new();
@@ -77,13 +95,14 @@ impl List {
                 None => return Ok(items),
             };
 
-            items.push(Self::collect_list(&next, &mut stream).await?);
+            items.push(Self::collect_list(&next, &mut stream, summary).await?);
         }
     }
 
     async fn collect_list(
         first: &PgRow,
-        _rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+        rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+        summary: bool,
     ) -> Result<List> {
         Ok(List {
             id: first.get("id"),
@@ -91,7 +110,68 @@ impl List {
             ts_updated: first.get("ts_updated"),
             data: ListDataTemplate {
                 name: first.get("name"),
+                item_refs: if summary {
+                    ListItemReferences::<Reference> { items: None }
+                } else {
+                    ListItemReferences::<Reference> {
+                        items: Some({
+                            let mut items = vec![Self::collect_item(first, rest).await?];
+                            loop {
+                                if !next_matches_first!(rest, first, "id") {
+                                    break items;
+                                }
+
+                                let next = match rest.try_next().await? {
+                                    Some(next) => next,
+                                    None => break items,
+                                };
+
+                                items.push(Self::collect_item(&next, rest).await?);
+                            }
+                        }),
+                    }
+                },
             },
+        })
+    }
+
+    async fn collect_item(
+        first: &PgRow,
+        _rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+    ) -> Result<ListItemReference> {
+        Ok(ListItemReference {
+            id: first.get("item_id"),
+            data: Some(ListItemDataTemplate {
+                checked: Some(first.get("item_checked")),
+                kind: Some({
+                    if let Some(id) = first.get("product_list_item_id") {
+                        ListItemKindTemplate::Product {
+                            link_id: id,
+                            product: Some(ProductReference {
+                                id: first.get("product_id"),
+                                data: Some(ProductDataTemplate {
+                                    name: Some(first.get("product_name")),
+                                    ..Default::default()
+                                }),
+                                ..Default::default()
+                            }),
+                        }
+                    } else if let Some(id) = first.get("temporary_list_item_id") {
+                        ListItemKindTemplate::Temporary {
+                            link_id: id,
+                            temporary: Some(TemporaryListItemTemplate {
+                                data: Some(TemporaryListItemDataTemplate {
+                                    name: Some(first.get("temporary_list_item_name")),
+                                }),
+                            }),
+                        }
+                    } else {
+                        panic!("unreachable!")
+                    }
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
         })
     }
 }
@@ -124,7 +204,7 @@ impl ListDb for ListDbPostgres<'_> {
         )
         .fetch(&mut *conn);
 
-        List::collect_lists(stream).await
+        List::collect_lists(stream, true).await
     }
 
     async fn get_by_id(&mut self, id: &Uuid) -> Result<List> {
@@ -171,7 +251,8 @@ impl ListDb for ListDbPostgres<'_> {
     async fn delete_by_id(&mut self, id: &Uuid) -> Result<()> {
         let mut conn = self.pool.acquire().await?;
 
-        // Relying on cascaded delete regarding corresponding list items
+        // Relying on cascaded delete of corresponding list items
+        // TODO: make sure that item types (products, temporary) are removed as well
         if sqlx::query(
             "
             DELETE FROM public.lists
@@ -198,22 +279,43 @@ impl ListDbPostgres<'_> {
     {
         let stream = sqlx::query(
             "
-            
             SELECT
                 lists.id,
                 lists.ts_created,
                 lists.ts_updated,
-                lists.name
+                lists.name,
+                list_items.id AS item_id,
+                list_items.ts_created AS item_ts_created,
+                list_items.ts_updated AS item_ts_updated,
+                list_items.checked AS item_checked,
+                product_list_items.id AS product_list_item_id,
+                products.id AS product_id,
+                products.name AS product_name,
+                temporary_list_items.id AS temporary_list_item_id,
+                temporary_list_items.name AS temporary_list_item_name
 
             FROM public.lists
+                LEFT JOIN public.list_items
+                    ON lists.id = list_items.list_id
+                LEFT JOIN public.product_list_items
+                    ON list_items.product_list_item_id = product_list_items.id
+                LEFT JOIN public.products
+                    ON product_list_items.product_id = products.id
+                LEFT JOIN public.temporary_list_items
+                    ON list_items.temporary_list_item_id = temporary_list_items.id
 
             WHERE lists.id = $1
+            ORDER BY
+                lists.name,
+                lists.id,
+                COALESCE(products.name, temporary_list_items.name),
+                list_items.id
             ",
         )
         .bind(id)
         .fetch(executor);
 
-        match List::collect_lists(stream).await?.pop() {
+        match List::collect_lists(stream, false).await?.pop() {
             Some(item) => Ok(item),
             None => Err((DbError::NotFound).into()),
         }
