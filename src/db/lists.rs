@@ -54,6 +54,7 @@ pub struct ListDataTemplate<M: Modifier> {
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct ListItemReferences<M: Modifier> {
+    #[serde(default)]
     #[serde(skip_serializing_if = "M::skip_data")]
     pub items: M::Data<Vec<ListItemReference>>,
 }
@@ -111,9 +112,9 @@ impl List {
             data: ListDataTemplate {
                 name: first.get("name"),
                 item_refs: if summary {
-                    ListItemReferences::<Reference> { items: None }
+                    ListItemReferences { items: None }
                 } else {
-                    ListItemReferences::<Reference> {
+                    ListItemReferences {
                         items: Some({
                             let mut items = vec![Self::collect_item(first, rest).await?];
                             loop {
