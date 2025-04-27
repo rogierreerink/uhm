@@ -30,6 +30,8 @@ DO $$ BEGIN
         ADD IF NOT EXISTS ts_created TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
         ADD IF NOT EXISTS ts_updated TIMESTAMP WITH TIME ZONE,
         ADD IF NOT EXISTS checked BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD IF NOT EXISTS list_id UUID NOT NULL REFERENCES public.lists (id)
+            ON DELETE CASCADE,
         ADD IF NOT EXISTS product_list_item_id UUID UNIQUE REFERENCES public.product_list_items (id)
             ON DELETE CASCADE,
         ADD IF NOT EXISTS temporary_list_item_id UUID UNIQUE REFERENCES public.temporary_list_items (id)

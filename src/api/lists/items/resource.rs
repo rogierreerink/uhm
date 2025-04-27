@@ -40,11 +40,11 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 #[instrument(skip(state))]
 pub async fn get_resource(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
+    Path((list_id, id)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
     let mut db = state.db().list_items();
 
-    let item = match db.get_by_id(&id).await {
+    let item = match db.get_by_id(&list_id, &id).await {
         Ok(block) => block,
         Err(err) => match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
@@ -65,12 +65,12 @@ pub async fn get_resource(
 #[instrument(skip(state, payload))]
 pub async fn patch_resource(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
+    Path((list_id, id)): Path<(Uuid, Uuid)>,
     Json(payload): Json<ListItemUpdate>,
 ) -> impl IntoResponse {
     let mut db = state.db().list_items();
 
-    let updated = match db.update_by_id(&id, payload).await {
+    let updated = match db.update_by_id(&list_id, &id, payload).await {
         Ok(updated) => updated,
         Err(err) => match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
@@ -91,11 +91,11 @@ pub async fn patch_resource(
 #[instrument(skip(state))]
 pub async fn delete_resource(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
+    Path((list_id, id)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
     let mut db = state.db().list_items();
 
-    if let Err(err) = db.delete_by_id(&id).await {
+    if let Err(err) = db.delete_by_id(&list_id, &id).await {
         match err.downcast_ref::<DbError>() {
             Some(DbError::NotFound) => {
                 tracing::error!("item could not be found: {:?}", err);

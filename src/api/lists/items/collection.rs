@@ -3,6 +3,7 @@ use crate::global::AppState;
 use crate::utilities::request::collection::{GetResponse, PostRequest, PostResponse};
 use crate::{api::handle_options, db::Db};
 
+use axum::extract::Path;
 use axum::{
     extract::State,
     http::{header, HeaderValue, StatusCode},
@@ -14,6 +15,7 @@ use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tracing::instrument;
+use uuid::Uuid;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new().merge(
@@ -38,10 +40,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
 #[axum::debug_handler]
 #[instrument(skip(state))]
-pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+pub async fn get_collection(
+    State(state): State<Arc<AppState>>,
+    Path(list_id): Path<Uuid>,
+) -> impl IntoResponse {
     let mut db = state.db().list_items();
 
-    let items = match db.get_multiple().await {
+    let items = match db.get_multiple(&list_id).await {
         Ok(items) => items,
         Err(err) => {
             tracing::error!("failed to get items: {:?}", err);
@@ -56,11 +61,12 @@ pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResp
 #[instrument(skip(state, payload))]
 pub async fn post_collection(
     State(state): State<Arc<AppState>>,
+    Path(list_id): Path<Uuid>,
     Json(payload): Json<PostRequest<ListItemCreate>>,
 ) -> impl IntoResponse {
     let mut db = state.db().list_items();
 
-    let created = match db.create_multiple(payload.data).await {
+    let created = match db.create_multiple(&list_id, payload.data).await {
         Ok(created) => created,
         Err(err) => {
             tracing::error!("failed to create items: {:?}", err);

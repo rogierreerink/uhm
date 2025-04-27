@@ -16,6 +16,8 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use tracing::instrument;
 use uuid::Uuid;
 
+use super::items;
+
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/:id", get(get_resource))
@@ -34,6 +36,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
                 )),
         )
         .with_state(state.clone())
+        .nest("/:id/items", items::create_router(state.clone()))
 }
 
 #[axum::debug_handler]

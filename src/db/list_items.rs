@@ -14,11 +14,20 @@ use super::{
 
 #[trait_variant::make(Send)]
 pub trait ListItemDb {
-    async fn get_multiple(&mut self) -> Result<Vec<ListItem>>;
-    async fn get_by_id(&mut self, id: &Uuid) -> Result<ListItem>;
-    async fn create_multiple(&mut self, items: Vec<ListItemCreate>) -> Result<Vec<ListItem>>;
-    async fn update_by_id(&mut self, id: &Uuid, item: ListItemUpdate) -> Result<ListItem>;
-    async fn delete_by_id(&mut self, id: &Uuid) -> Result<()>;
+    async fn get_multiple(&mut self, list_id: &Uuid) -> Result<Vec<ListItem>>;
+    async fn get_by_id(&mut self, list_id: &Uuid, id: &Uuid) -> Result<ListItem>;
+    async fn create_multiple(
+        &mut self,
+        list_id: &Uuid,
+        items: Vec<ListItemCreate>,
+    ) -> Result<Vec<ListItem>>;
+    async fn update_by_id(
+        &mut self,
+        list_id: &Uuid,
+        id: &Uuid,
+        item: ListItemUpdate,
+    ) -> Result<ListItem>;
+    async fn delete_by_id(&mut self, list_id: &Uuid, id: &Uuid) -> Result<()>;
 }
 
 pub type ListItem = ListItemTemplate<Query>;
@@ -120,7 +129,7 @@ impl<'a> ListItemDbPostgres<'a> {
 }
 
 impl ListItemDb for ListItemDbPostgres<'_> {
-    async fn get_multiple(&mut self) -> Result<Vec<ListItem>> {
+    async fn get_multiple(&mut self, list_id: &Uuid) -> Result<Vec<ListItem>> {
         let mut conn = self.pool.acquire().await?;
 
         sqlx::query_as(
@@ -144,6 +153,7 @@ impl ListItemDb for ListItemDbPostgres<'_> {
                 LEFT JOIN public.temporary_list_items
                     ON list_items.temporary_list_item_id = temporary_list_items.id
 
+            WHERE list_items.list_id = $1
             ORDER BY
                 CASE
                     WHEN product_list_items.id IS NOT NULL THEN products.name
@@ -152,24 +162,29 @@ impl ListItemDb for ListItemDbPostgres<'_> {
                 list_items.id
             ",
         )
+        .bind(list_id)
         .fetch(&mut *conn)
         .try_collect()
         .map_err(|error| error.into())
         .await
     }
 
-    async fn get_by_id(&mut self, id: &Uuid) -> Result<ListItem> {
+    async fn get_by_id(&mut self, list_id: &Uuid, id: &Uuid) -> Result<ListItem> {
         let mut conn = self.pool.acquire().await?;
 
-        Self::get_by_id(&mut *conn, id).await
+        Self::get_by_id(&mut *conn, list_id, id).await
     }
 
-    async fn create_multiple(&mut self, items: Vec<ListItemCreate>) -> Result<Vec<ListItem>> {
+    async fn create_multiple(
+        &mut self,
+        list_id: &Uuid,
+        items: Vec<ListItemCreate>,
+    ) -> Result<Vec<ListItem>> {
         let mut tx = self.pool.begin().await?;
         let mut created = Vec::new();
 
         for item in items {
-            match Self::create(&mut tx, item).await {
+            match Self::create(&mut tx, list_id, item).await {
                 Ok(item) => created.push(item),
                 Err(error) => {
                     tx.rollback().await?;
@@ -183,10 +198,15 @@ impl ListItemDb for ListItemDbPostgres<'_> {
         Ok(created)
     }
 
-    async fn update_by_id(&mut self, id: &Uuid, item: ListItemUpdate) -> Result<ListItem> {
+    async fn update_by_id(
+        &mut self,
+        list_id: &Uuid,
+        id: &Uuid,
+        item: ListItemUpdate,
+    ) -> Result<ListItem> {
         let mut tx = self.pool.begin().await?;
 
-        let updated = match Self::update_by_id(&mut tx, id, item).await {
+        let updated = match Self::update_by_id(&mut tx, list_id, id, item).await {
             Ok(item) => item,
             Err(error) => {
                 tx.rollback().await?;
@@ -199,10 +219,10 @@ impl ListItemDb for ListItemDbPostgres<'_> {
         Ok(updated)
     }
 
-    async fn delete_by_id(&mut self, id: &Uuid) -> Result<()> {
+    async fn delete_by_id(&mut self, list_id: &Uuid, id: &Uuid) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
-        match Self::delete_by_id(&mut tx, id).await {
+        match Self::delete_by_id(&mut tx, list_id, id).await {
             Ok(item) => item,
             Err(error) => {
                 tx.rollback().await?;
@@ -217,7 +237,7 @@ impl ListItemDb for ListItemDbPostgres<'_> {
 }
 
 impl ListItemDbPostgres<'_> {
-    async fn get_by_id<'c, E>(executor: E, id: &Uuid) -> Result<ListItem>
+    async fn get_by_id<'c, E>(executor: E, list_id: &Uuid, id: &Uuid) -> Result<ListItem>
     where
         E: PgExecutor<'c>,
     {
@@ -242,7 +262,10 @@ impl ListItemDbPostgres<'_> {
                 LEFT JOIN public.temporary_list_items
                     ON list_items.temporary_list_item_id = temporary_list_items.id
 
-            WHERE list_items.id = $1
+            WHERE
+                list_items.list_id = $1 AND
+                list_items.id = $2
+
             ORDER BY
                 CASE
                     WHEN product_list_items.id IS NOT NULL THEN products.name
@@ -251,6 +274,7 @@ impl ListItemDbPostgres<'_> {
                 list_items.id
             ",
         )
+        .bind(list_id)
         .bind(id)
         .fetch_one(executor)
         .map_err(|error| match error {
@@ -260,7 +284,11 @@ impl ListItemDbPostgres<'_> {
         .await
     }
 
-    async fn create(tx: &mut PgTransaction<'_>, create: ListItemCreate) -> Result<ListItem> {
+    async fn create(
+        tx: &mut PgTransaction<'_>,
+        list_id: &Uuid,
+        create: ListItemCreate,
+    ) -> Result<ListItem> {
         match create.kind {
             ListItemKindTemplate::Product { product, .. } => {
                 let link_id = Uuid::new_v4();
@@ -278,12 +306,13 @@ impl ListItemDbPostgres<'_> {
                 let item_id = Uuid::new_v4();
                 let item = sqlx::query(
                     "
-                    INSERT INTO public.list_items (id, checked, product_list_item_id)
-                    VALUES ($1, $2, $3)
+                    INSERT INTO public.list_items (id, list_id, checked, product_list_item_id)
+                    VALUES ($1, $2, $3, $4)
                     RETURNING ts_created, checked
                     ",
                 )
                 .bind(item_id)
+                .bind(list_id)
                 .bind(create.checked)
                 .bind(link_id)
                 .fetch_one(&mut **tx)
@@ -322,12 +351,13 @@ impl ListItemDbPostgres<'_> {
                 let item_id = Uuid::new_v4();
                 let item = sqlx::query(
                     "
-                    INSERT INTO public.list_items (id, checked, temporary_list_item_id)
-                    VALUES ($1, $2, $3)
+                    INSERT INTO public.list_items (id, list_id, checked, temporary_list_item_id)
+                    VALUES ($1, $2, $3, $4)
                     RETURNING ts_created, checked
                     ",
                 )
                 .bind(item_id)
+                .bind(list_id)
                 .bind(create.checked)
                 .bind(link_id)
                 .fetch_one(&mut **tx)
@@ -355,10 +385,11 @@ impl ListItemDbPostgres<'_> {
 
     async fn update_by_id(
         tx: &mut PgTransaction<'_>,
+        list_id: &Uuid,
         id: &Uuid,
         update: ListItemUpdate,
     ) -> Result<ListItem> {
-        let mut item = Self::get_by_id(&mut **tx, id).await?;
+        let mut item = Self::get_by_id(&mut **tx, list_id, id).await?;
 
         match &mut item.data.kind {
             ListItemKindTemplate::Product {
@@ -374,11 +405,11 @@ impl ListItemDbPostgres<'_> {
 
                     sqlx::query(
                         "
-                         UPDATE public.product_list_items
-                         SET product_id = $2,
-                             ts_updated = NOW()
-                         WHERE id = $1
-                         ",
+                        UPDATE public.product_list_items
+                        SET product_id = $2,
+                            ts_updated = NOW()
+                        WHERE id = $1
+                        ",
                     )
                     .bind(link_id.clone())
                     .bind(current.id)
@@ -413,11 +444,11 @@ impl ListItemDbPostgres<'_> {
 
                     sqlx::query(
                         "
-                         UPDATE public.temporary_list_items
-                         SET name = $2,
-                             ts_updated = NOW()
-                         WHERE id = $1
-                         ",
+                        UPDATE public.temporary_list_items
+                        SET name = $2,
+                            ts_updated = NOW()
+                        WHERE id = $1
+                        ",
                     )
                     .bind(link_id.clone())
                     .bind(current.data.name.clone())
@@ -450,8 +481,8 @@ impl ListItemDbPostgres<'_> {
         Ok(item)
     }
 
-    async fn delete_by_id(tx: &mut PgTransaction<'_>, id: &Uuid) -> Result<()> {
-        let item = Self::get_by_id(&mut **tx, id).await?;
+    async fn delete_by_id(tx: &mut PgTransaction<'_>, list_id: &Uuid, id: &Uuid) -> Result<()> {
+        let item = Self::get_by_id(&mut **tx, list_id, id).await?;
 
         let delete_link_query = match item.data.kind {
             ListItemKindTemplate::Product { link_id, .. } => sqlx::query(
