@@ -8,7 +8,6 @@ anyhow = { version = "1.0.97", features = ["backtrace"] }
 axum = { version = "0.7.7", features = ["macros", "original-uri", "ws"] }
 chrono = { version = "0.4.40", features = ["serde"] }
 futures-util = { version = "0.3.31" }
-indexmap = "2.9.0"
 pin-project-lite = "0.2.16"
 pulldown-cmark = "0.13.0"
 serde = { version = "1.0.214", features = ["derive"] }

@@ -1,7 +1,8 @@
+use std::pin::Pin;
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use futures_util::{Stream, TryStreamExt};
-use indexmap::IndexMap;
+use futures_util::{stream::Peekable, Stream, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgRow, prelude::FromRow, PgExecutor, PgPool, PgTransaction, Row};
 use uuid::Uuid;
@@ -14,7 +15,9 @@ use crate::{
 use super::{
     blocks::{BlockDataTemplate, BlockKindTemplate, BlockReference},
     ingredient_collections::{IngredientCollectionDataTemplate, IngredientCollectionReference},
+    ingredients::{IngredientDataTemplate, IngredientReference},
     markdown::{MarkdownDataTemplate, MarkdownReference},
+    products::{ProductDataTemplate, ProductReference},
     DbError,
 };
 
@@ -74,32 +77,100 @@ impl FromRow<'_, PgRow> for Page {
     }
 }
 
-impl FromRow<'_, PgRow> for PageBlockTemplate<Query> {
-    fn from_row(row: &'_ PgRow) -> std::result::Result<Self, sqlx::Error> {
-        Ok(Self {
-            link_id: row.get("page_block_id"),
+macro_rules! peek_matches_id {
+    ($first:ident, $stream:ident, $column_name:expr) => {
+        match $stream.as_mut().peek().await {
+            Some(Ok(next))
+                if Some($first.get::<Uuid, _>($column_name)) == next.get($column_name) =>
+            {
+                true
+            }
+            _ => false,
+        }
+    };
+}
+
+impl Page {
+    async fn collect_pages(
+        stream: impl Stream<Item = Result<PgRow, sqlx::Error>>,
+    ) -> Result<Vec<Page>> {
+        let mut stream = std::pin::pin!(stream.peekable());
+        let mut items = Vec::new();
+        loop {
+            let next = match stream.as_mut().try_next().await? {
+                Some(next) => next,
+                None => return Ok(items),
+            };
+
+            items.push(Self::collect_page(&next, &mut stream).await?);
+        }
+    }
+
+    async fn collect_page(
+        first: &PgRow,
+        rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+    ) -> Result<Page> {
+        Ok(Page {
+            id: first.get("id"),
+            ts_created: first.get("ts_created"),
+            ts_updated: first.get("ts_updated"),
+            data: PageDataTemplate {
+                name: first.get("name"),
+                blocks: Self::collect_page_blocks(first, rest).await?,
+            },
+        })
+    }
+
+    async fn collect_page_blocks(
+        first: &PgRow,
+        rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+    ) -> Result<Vec<PageBlockTemplate<Query>>> {
+        let mut items = vec![Self::collect_page_block(first, rest).await?];
+        loop {
+            if !peek_matches_id!(first, rest, "id") {
+                return Ok(items);
+            }
+
+            let next = match rest.try_next().await? {
+                Some(next) => next,
+                None => return Ok(items),
+            };
+
+            items.push(Self::collect_page_block(&next, rest).await?);
+        }
+    }
+
+    async fn collect_page_block(
+        first: &PgRow,
+        rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+    ) -> Result<PageBlockTemplate<Query>> {
+        Ok(PageBlockTemplate {
+            link_id: first.get("page_block_id"),
             block: BlockReference {
-                id: row.get("block_id"),
+                id: first.get("block_id"),
                 data: Some(BlockDataTemplate::<Reference> {
                     kind: Some({
-                        if let Some(id) = row.get("ingredient_collection_block_id") {
+                        if let Some(id) = first.get("ingredient_collection_block_id") {
                             BlockKindTemplate::IngredientCollection {
                                 link_id: id,
                                 ingredient_collection: Some(IngredientCollectionReference {
-                                    id: row.get("ingredient_collection_id"),
+                                    id: first.get("ingredient_collection_id"),
                                     data: Some(IngredientCollectionDataTemplate {
+                                        ingredients: Some(
+                                            Self::collect_ingredients(first, rest).await?,
+                                        ),
                                         ..Default::default()
                                     }),
                                     ..Default::default()
                                 }),
                             }
-                        } else if let Some(id) = row.get("markdown_block_id") {
+                        } else if let Some(id) = first.get("markdown_block_id") {
                             BlockKindTemplate::Markdown {
                                 link_id: id,
                                 markdown: Some(MarkdownReference {
-                                    id: row.get("markdown_id"),
+                                    id: first.get("markdown_id"),
                                     data: Some(MarkdownDataTemplate {
-                                        markdown: row.get("markdown"),
+                                        markdown: Some(first.get("markdown")),
                                         ..Default::default()
                                     }),
                                     ..Default::default()
@@ -115,39 +186,44 @@ impl FromRow<'_, PgRow> for PageBlockTemplate<Query> {
             },
         })
     }
-}
 
-impl Page {
-    async fn try_item_from_stream(
-        rows: &mut (impl Stream<Item = Result<PgRow, sqlx::Error>> + Unpin),
-    ) -> Result<Option<Self>> {
-        let mut item = Option::None;
-
-        while let Some(row) = rows.try_next().await? {
-            let item = item.get_or_insert(Page::from_row(&row)?);
-
-            if let Some(_) = row.get::<Option<Uuid>, _>("block_id") {
-                item.data.blocks.push(PageBlockTemplate::from_row(&row)?);
+    async fn collect_ingredients(
+        first: &PgRow,
+        rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+    ) -> Result<Vec<IngredientReference>> {
+        let mut items = vec![Self::collect_ingredient(first, rest).await?];
+        loop {
+            if !peek_matches_id!(first, rest, "ingredient_collection_id") {
+                return Ok(items);
             }
-        }
 
-        Ok(item)
+            let next = match rest.try_next().await? {
+                Some(next) => next,
+                None => return Ok(items),
+            };
+
+            items.push(Self::collect_ingredient(&next, rest).await?);
+        }
     }
 
-    async fn try_items_from_stream(
-        rows: &mut (impl Stream<Item = Result<PgRow, sqlx::Error>> + Unpin),
-    ) -> Result<Vec<Self>> {
-        let mut items = IndexMap::<Uuid, _>::new();
-
-        while let Some(row) = rows.try_next().await? {
-            let item = items.entry(row.get("id")).or_insert(Page::from_row(&row)?);
-
-            if let Some(_) = row.get::<Option<Uuid>, _>("block_id") {
-                item.data.blocks.push(PageBlockTemplate::from_row(&row)?);
-            }
-        }
-
-        Ok(items.into_values().collect())
+    async fn collect_ingredient(
+        first: &PgRow,
+        _rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+    ) -> Result<IngredientReference> {
+        Ok(IngredientReference {
+            id: first.get("ingredient_id"),
+            data: Some(IngredientDataTemplate {
+                product: Some(ProductReference {
+                    id: first.get("product_id"),
+                    data: Some(ProductDataTemplate {
+                        name: Some(first.get("product_name")),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+            }),
+            ..Default::default()
+        })
     }
 }
 
@@ -164,7 +240,7 @@ impl<'a> PageDbPostgres<'a> {
 impl PageDb for PageDbPostgres<'_> {
     async fn get_multiple(&mut self) -> Result<Vec<Page>> {
         let mut conn = self.pool.acquire().await?;
-        let mut stream = sqlx::query(
+        let stream = sqlx::query(
             "
             SELECT
                 pages.id,
@@ -175,6 +251,9 @@ impl PageDb for PageDbPostgres<'_> {
                 blocks.id AS block_id,
                 ingredient_collection_blocks.id AS ingredient_collection_block_id,
                 ingredient_collections.id AS ingredient_collection_id,
+                ingredients.id AS ingredient_id,
+                products.id AS product_id,
+                products.name AS product_name,
                 markdown_blocks.id AS markdown_block_id,
                 markdown.id AS markdown_id,
                 markdown.markdown AS markdown
@@ -189,6 +268,10 @@ impl PageDb for PageDbPostgres<'_> {
                     ON blocks.ingredient_collection_block_id = ingredient_collection_blocks.id
                 LEFT JOIN public.ingredient_collections
                     ON ingredient_collection_blocks.ingredient_collection_id = ingredient_collections.id
+                LEFT JOIN public.ingredients
+                    ON ingredient_collections.id = ingredients.ingredient_collection_id
+                LEFT JOIN public.products
+                    ON ingredients.product_id = products.id
 
                 LEFT JOIN public.markdown_blocks
                     ON blocks.markdown_block_id = markdown_blocks.id
@@ -197,12 +280,13 @@ impl PageDb for PageDbPostgres<'_> {
 
             ORDER BY
                 COALESCE(pages.ts_updated, pages.ts_created) DESC,
-                page_blocks.sequence_number
+                page_blocks.sequence_number,
+                products.name
             ",
         )
         .fetch(&mut *conn);
 
-        Page::try_items_from_stream(&mut stream).await
+        Page::collect_pages(stream).await
     }
 
     async fn get_by_id(&mut self, id: &Uuid) -> Result<Page> {
@@ -274,7 +358,7 @@ impl PageDbPostgres<'_> {
     where
         E: PgExecutor<'c>,
     {
-        let mut stream = sqlx::query(
+        let stream = sqlx::query(
             "
             SELECT
                 pages.id,
@@ -285,6 +369,9 @@ impl PageDbPostgres<'_> {
                 blocks.id AS block_id,
                 ingredient_collection_blocks.id AS ingredient_collection_block_id,
                 ingredient_collections.id AS ingredient_collection_id,
+                ingredients.id AS ingredient_id,
+                products.id AS product_id,
+                products.name AS product_name,
                 markdown_blocks.id AS markdown_block_id,
                 markdown.id AS markdown_id,
                 markdown.markdown AS markdown
@@ -299,20 +386,26 @@ impl PageDbPostgres<'_> {
                     ON blocks.ingredient_collection_block_id = ingredient_collection_blocks.id
                 LEFT JOIN public.ingredient_collections
                     ON ingredient_collection_blocks.ingredient_collection_id = ingredient_collections.id
+                LEFT JOIN public.ingredients
+                    ON ingredient_collections.id = ingredients.ingredient_collection_id
+                LEFT JOIN public.products
+                    ON ingredients.product_id = products.id
 
                 LEFT JOIN public.markdown_blocks
                     ON blocks.markdown_block_id = markdown_blocks.id
                 LEFT JOIN public.markdown
                     ON markdown_blocks.markdown_id = markdown.id
-                    
+
             WHERE pages.id = $1
-            ORDER BY page_blocks.sequence_number
+            ORDER BY
+                page_blocks.sequence_number,
+                products.name
             ",
         )
         .bind(id)
         .fetch(executor);
 
-        match Page::try_item_from_stream(&mut stream).await? {
+        match Page::collect_pages(stream).await?.pop() {
             Some(item) => Ok(item),
             None => Err((DbError::NotFound).into()),
         }
