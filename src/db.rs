@@ -5,6 +5,7 @@ use blocks::{BlockDb, BlockDbPostgres};
 use ingredient_collections::{IngredientCollectionDb, IngredientCollectionDbPostgres};
 use ingredients::{IngredientDb, IngredientDbPostgres};
 use list_items::{ListItemDb, ListItemDbPostgres};
+use lists::{ListDb, ListDbPostgres};
 use markdown::{MarkdownDb, MarkdownDbPostgres};
 use pages::{PageDb, PageDbPostgres};
 use products::{ProductDb, ProductDbPostgres};
@@ -14,6 +15,7 @@ pub mod blocks;
 pub mod ingredient_collections;
 pub mod ingredients;
 pub mod list_items;
+pub mod lists;
 pub mod markdown;
 pub mod pages;
 pub mod products;
@@ -23,6 +25,7 @@ pub trait Db {
     fn ingredient_collections(&self) -> impl IngredientCollectionDb;
     fn ingredients(&self) -> impl IngredientDb;
     fn list_items(&self) -> impl ListItemDb;
+    fn lists(&self) -> impl ListDb;
     fn markdown(&self) -> impl MarkdownDb;
     fn pages(&self) -> impl PageDb;
     fn products(&self) -> impl ProductDb;
@@ -53,6 +56,10 @@ impl Db for DbPostgres {
 
     fn list_items(&self) -> impl ListItemDb {
         ListItemDbPostgres::new(&self.sqlx)
+    }
+
+    fn lists(&self) -> impl ListDb {
+        ListDbPostgres::new(&self.sqlx)
     }
 
     fn markdown(&self) -> impl MarkdownDb {
