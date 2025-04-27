@@ -77,15 +77,12 @@ impl FromRow<'_, PgRow> for Page {
     }
 }
 
-macro_rules! peek_matches_id {
-    ($first:ident, $stream:ident, $column_name:expr) => {
-        match $stream.as_mut().peek().await {
-            Some(Ok(next))
-                if Some($first.get::<Uuid, _>($column_name)) == next.get($column_name) =>
-            {
-                true
-            }
-            _ => false,
+macro_rules! next_matches_first {
+    ($stream:ident, $first:ident, $($column_name:expr),+) => {
+        if let Some(Ok(next)) = $stream.as_mut().peek().await {
+            $(Some(next.get::<Uuid, _>($column_name)) == $first.get($column_name)) && +
+        } else {
+            false
         }
     };
 }
@@ -116,28 +113,23 @@ impl Page {
             ts_updated: first.get("ts_updated"),
             data: PageDataTemplate {
                 name: first.get("name"),
-                blocks: Self::collect_page_blocks(first, rest).await?,
+                blocks: {
+                    let mut items = vec![Self::collect_page_block(first, rest).await?];
+                    loop {
+                        if !next_matches_first!(rest, first, "id") {
+                            break items;
+                        }
+
+                        let next = match rest.try_next().await? {
+                            Some(next) => next,
+                            None => break items,
+                        };
+
+                        items.push(Self::collect_page_block(&next, rest).await?);
+                    }
+                },
             },
         })
-    }
-
-    async fn collect_page_blocks(
-        first: &PgRow,
-        rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
-    ) -> Result<Vec<PageBlockTemplate<Query>>> {
-        let mut items = vec![Self::collect_page_block(first, rest).await?];
-        loop {
-            if !peek_matches_id!(first, rest, "id") {
-                return Ok(items);
-            }
-
-            let next = match rest.try_next().await? {
-                Some(next) => next,
-                None => return Ok(items),
-            };
-
-            items.push(Self::collect_page_block(&next, rest).await?);
-        }
     }
 
     async fn collect_page_block(
@@ -153,28 +145,14 @@ impl Page {
                         if let Some(id) = first.get("ingredient_collection_block_id") {
                             BlockKindTemplate::IngredientCollection {
                                 link_id: id,
-                                ingredient_collection: Some(IngredientCollectionReference {
-                                    id: first.get("ingredient_collection_id"),
-                                    data: Some(IngredientCollectionDataTemplate {
-                                        ingredients: Some(
-                                            Self::collect_ingredients(first, rest).await?,
-                                        ),
-                                        ..Default::default()
-                                    }),
-                                    ..Default::default()
-                                }),
+                                ingredient_collection: Some(
+                                    Self::collect_ingredient_collection(first, rest).await?,
+                                ),
                             }
                         } else if let Some(id) = first.get("markdown_block_id") {
                             BlockKindTemplate::Markdown {
                                 link_id: id,
-                                markdown: Some(MarkdownReference {
-                                    id: first.get("markdown_id"),
-                                    data: Some(MarkdownDataTemplate {
-                                        markdown: Some(first.get("markdown")),
-                                        ..Default::default()
-                                    }),
-                                    ..Default::default()
-                                }),
+                                markdown: Some(Self::collect_markdown(first, rest).await?),
                             }
                         } else {
                             panic!("unreachable!")
@@ -187,23 +165,32 @@ impl Page {
         })
     }
 
-    async fn collect_ingredients(
+    async fn collect_ingredient_collection(
         first: &PgRow,
         rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
-    ) -> Result<Vec<IngredientReference>> {
-        let mut items = vec![Self::collect_ingredient(first, rest).await?];
-        loop {
-            if !peek_matches_id!(first, rest, "ingredient_collection_id") {
-                return Ok(items);
-            }
+    ) -> Result<IngredientCollectionReference> {
+        Ok(IngredientCollectionReference {
+            id: first.get("ingredient_collection_id"),
+            data: Some(IngredientCollectionDataTemplate {
+                ingredients: Some({
+                    let mut items = vec![Self::collect_ingredient(first, rest).await?];
+                    loop {
+                        if !next_matches_first!(rest, first, "id", "ingredient_collection_id") {
+                            break items;
+                        }
 
-            let next = match rest.try_next().await? {
-                Some(next) => next,
-                None => return Ok(items),
-            };
+                        let next = match rest.try_next().await? {
+                            Some(next) => next,
+                            None => break items,
+                        };
 
-            items.push(Self::collect_ingredient(&next, rest).await?);
-        }
+                        items.push(Self::collect_ingredient(&next, rest).await?);
+                    }
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
     }
 
     async fn collect_ingredient(
@@ -221,6 +208,20 @@ impl Page {
                     }),
                     ..Default::default()
                 }),
+            }),
+            ..Default::default()
+        })
+    }
+
+    async fn collect_markdown(
+        first: &PgRow,
+        _rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+    ) -> Result<MarkdownReference> {
+        Ok(MarkdownReference {
+            id: first.get("markdown_id"),
+            data: Some(MarkdownDataTemplate {
+                markdown: Some(first.get("markdown")),
+                ..Default::default()
             }),
             ..Default::default()
         })
