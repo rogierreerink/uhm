@@ -43,32 +43,32 @@ DO $$ BEGIN
             (temporary_list_item_id IS NOT NULL)::INTEGER = 1
         );
 
-    -- Function/trigger: delete list item references when deleting list item
-
-    CREATE OR REPLACE FUNCTION public.delete_list_item_references()
-    RETURNS TRIGGER
-    LANGUAGE plpgsql AS $$
-        DECLARE
-        BEGIN
-            -- Delete product list item
-            IF OLD.product_list_item_id IS NOT NULL THEN
-                DELETE FROM public.product_list_items
-                WHERE id = OLD.product_list_item_id;
-                RETURN OLD;
-            END IF;
-            
-            -- Delete temporary list item
-            IF OLD.temporary_list_item_id IS NOT NULL THEN
-                DELETE FROM public.temporary_list_items
-                WHERE id = OLD.temporary_list_item_id;
-                RETURN OLD;
-            END IF;
-        END;
-    $$;
-
-    CREATE OR REPLACE TRIGGER delete_list_item_references
-    AFTER DELETE ON public.list_items
-    FOR EACH ROW
-    EXECUTE FUNCTION delete_list_item_references();
-
 END $$
+
+-- Function/trigger: delete list item references when deleting list item
+
+CREATE OR REPLACE FUNCTION public.delete_list_item_references()
+RETURNS TRIGGER
+LANGUAGE plpgsql AS $$
+    DECLARE
+    BEGIN
+        -- Delete product list item
+        IF OLD.product_list_item_id IS NOT NULL THEN
+            DELETE FROM public.product_list_items
+            WHERE id = OLD.product_list_item_id;
+            RETURN OLD;
+        END IF;
+        
+        -- Delete temporary list item
+        IF OLD.temporary_list_item_id IS NOT NULL THEN
+            DELETE FROM public.temporary_list_items
+            WHERE id = OLD.temporary_list_item_id;
+            RETURN OLD;
+        END IF;
+    END;
+$$;
+
+CREATE OR REPLACE TRIGGER delete_list_item_references
+AFTER DELETE ON public.list_items
+FOR EACH ROW
+EXECUTE FUNCTION delete_list_item_references();

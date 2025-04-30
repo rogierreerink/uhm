@@ -42,3 +42,31 @@ DO $$ BEGIN
         );
 
 END $$
+
+-- Function/trigger: delete block references when deleting block
+
+CREATE OR REPLACE FUNCTION public.delete_block_references()
+RETURNS TRIGGER
+LANGUAGE plpgsql AS $$
+    DECLARE
+    BEGIN
+        -- Delete ingredient collection block
+        IF OLD.ingredient_collection_block_id IS NOT NULL THEN
+            DELETE FROM public.ingredient_collection_blocks
+            WHERE id = OLD.ingredient_collection_block_id;
+            RETURN OLD;
+        END IF;
+        
+        -- Delete markdown block
+        IF OLD.markdown_block_id IS NOT NULL THEN
+            DELETE FROM public.markdown_blocks
+            WHERE id = OLD.markdown_block_id;
+            RETURN OLD;
+        END IF;
+    END;
+$$;
+
+CREATE OR REPLACE TRIGGER delete_block_references
+AFTER DELETE ON public.blocks
+FOR EACH ROW
+EXECUTE FUNCTION delete_block_references();

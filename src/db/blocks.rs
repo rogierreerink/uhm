@@ -189,17 +189,23 @@ impl BlockDb for BlockDbPostgres<'_> {
     }
 
     async fn delete_by_id(&mut self, id: &Uuid) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
+        let mut conn = self.pool.acquire().await?;
 
-        match Self::delete_by_id(&mut tx, id).await {
-            Ok(item) => item,
-            Err(error) => {
-                tx.rollback().await?;
-                return Err(error.into());
-            }
-        };
-
-        tx.commit().await?;
+        // Relying on SQL trigger to delete corresponding block types (markdown, etc)
+        if sqlx::query(
+            "
+            DELETE FROM public.blocks
+            WHERE id = $1
+            ",
+        )
+        .bind(id)
+        .execute(&mut *conn)
+        .await?
+        .rows_affected()
+            == 0
+        {
+            return Err((DbError::NotFound).into());
+        }
 
         Ok(())
     }
@@ -430,36 +436,5 @@ impl BlockDbPostgres<'_> {
         item.ts_updated = row.get("ts_updated");
 
         Ok(item)
-    }
-
-    async fn delete_by_id(tx: &mut PgTransaction<'_>, id: &Uuid) -> Result<()> {
-        let item = Self::get_by_id(&mut **tx, id).await?;
-
-        let delete_link_query = match item.data.kind {
-            BlockKindTemplate::IngredientCollection { link_id, .. } => sqlx::query(
-                "
-                DELETE FROM public.ingredient_collection_blocks
-                WHERE id = $1
-                ",
-            )
-            .bind(link_id)
-            .execute(&mut **tx),
-
-            BlockKindTemplate::Markdown { link_id, .. } => sqlx::query(
-                "
-                DELETE FROM public.markdown_blocks
-                WHERE id = $1
-                ",
-            )
-            .bind(link_id)
-            .execute(&mut **tx),
-        };
-
-        // We are relying on cascaded deletion of the main item
-        if delete_link_query.await?.rows_affected() == 0 {
-            return Err((DbError::InvalidContent).into());
-        }
-
-        Ok(())
     }
 }
