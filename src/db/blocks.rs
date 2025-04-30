@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgRow, prelude::FromRow, PgExecutor, PgPool, PgTransaction, Row};
 use uuid::Uuid;
 
-use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
+use crate::utilities::{
+    markdown::markdown_to_html,
+    modifier::{Create, Modifier, Query, Reference, Update},
+};
 
 use super::{
     ingredient_collections::{IngredientCollectionDataTemplate, IngredientCollectionReference},
@@ -85,9 +88,13 @@ impl FromRow<'_, PgRow> for Block {
                             link_id: id,
                             markdown: MarkdownReference {
                                 id: row.get("markdown_id"),
-                                data: Some(MarkdownDataTemplate {
-                                    markdown: row.get("markdown"),
-                                    ..Default::default()
+                                data: Some({
+                                    let markdown = row.get::<String, _>("markdown");
+                                    let html = markdown_to_html(&markdown);
+                                    MarkdownDataTemplate {
+                                        markdown: Some(markdown),
+                                        html: Some(html),
+                                    }
                                 }),
                                 ..Default::default()
                             },
