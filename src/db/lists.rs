@@ -116,7 +116,12 @@ impl List {
                 } else {
                     ListItemReferences {
                         items: Some({
-                            let mut items = vec![Self::collect_item(first, rest).await?];
+                            let mut items = Vec::new();
+
+                            if first.get::<Option<Uuid>, _>("item_id").is_some() {
+                                items.push(Self::collect_item(first, rest).await?);
+                            }
+
                             loop {
                                 if !next_matches_first!(rest, first, "id") {
                                     break items;
@@ -253,7 +258,6 @@ impl ListDb for ListDbPostgres<'_> {
         let mut conn = self.pool.acquire().await?;
 
         // Relying on cascaded delete of corresponding list items
-        // TODO: make sure that item types (products, temporary) are removed as well
         if sqlx::query(
             "
             DELETE FROM public.lists

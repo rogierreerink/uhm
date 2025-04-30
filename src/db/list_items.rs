@@ -219,17 +219,24 @@ impl ListItemDb for ListItemDbPostgres<'_> {
     }
 
     async fn delete_by_id(&mut self, list_id: &Uuid, id: &Uuid) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
+        let mut conn = self.pool.acquire().await?;
 
-        match Self::delete_by_id(&mut tx, list_id, id).await {
-            Ok(item) => item,
-            Err(error) => {
-                tx.rollback().await?;
-                return Err(error.into());
-            }
-        };
-
-        tx.commit().await?;
+        // Relying on SQL trigger to delete corresponding list item types (products, temporary)
+        if sqlx::query(
+            "
+            DELETE FROM public.list_items
+            WHERE list_id = $1 AND id = $2
+            ",
+        )
+        .bind(list_id)
+        .bind(id)
+        .execute(&mut *conn)
+        .await?
+        .rows_affected()
+            == 0
+        {
+            return Err((DbError::NotFound).into());
+        }
 
         Ok(())
     }
@@ -475,36 +482,5 @@ impl ListItemDbPostgres<'_> {
         item.ts_updated = row.get("ts_updated");
 
         Ok(item)
-    }
-
-    async fn delete_by_id(tx: &mut PgTransaction<'_>, list_id: &Uuid, id: &Uuid) -> Result<()> {
-        let item = Self::get_by_id(&mut **tx, list_id, id).await?;
-
-        let delete_link_query = match item.data.kind {
-            ListItemKindTemplate::Product { link_id, .. } => sqlx::query(
-                "
-                DELETE FROM public.product_list_items
-                WHERE id = $1
-                ",
-            )
-            .bind(link_id)
-            .execute(&mut **tx),
-
-            ListItemKindTemplate::Temporary { link_id, .. } => sqlx::query(
-                "
-                DELETE FROM public.temporary_list_items
-                WHERE id = $1
-                ",
-            )
-            .bind(link_id)
-            .execute(&mut **tx),
-        };
-
-        // We are relying on cascaded deletion of the main item
-        if delete_link_query.await?.rows_affected() == 0 {
-            return Err((DbError::InvalidContent).into());
-        }
-
-        Ok(())
     }
 }
