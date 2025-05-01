@@ -17,7 +17,7 @@
 	import list, { type GetResponse } from '$lib/data/lists/resource';
 	import list_items from '$lib/data/lists/items/collection';
 	import list_item, { type GetResponse as GetItemResponse } from '$lib/data/lists/items/resource';
-	import products from '$lib/data/products/collection';
+	import products, { type GetResponse as GetProductResponse } from '$lib/data/products/collection';
 	import { invalidate } from '$app/navigation';
 	import { page } from '$app/state';
 	import Label from '$lib/components/labels/label.svelte';
@@ -41,6 +41,27 @@
 
 	let confirmDeleteModal = $state<Promise<DataResponse<GetItemResponse>>>();
 
+	let addItemProductMatches: GetProductResponse | undefined = $state();
+
+	$effect(() => {
+		if (addItemInput.length == 0) {
+			addItemProductMatches = undefined;
+			return;
+		}
+
+		let product_matches = products
+			.get(
+				new URLSearchParams({
+					name: addItemInput
+				})
+			)
+			.then((response) => {
+				if (response.ok) {
+					addItemProductMatches = response.data;
+				}
+			});
+	});
+
 	async function createTemporaryItem() {
 		const text = addItemInput.trim();
 		if (text.length === 0) {
@@ -55,6 +76,21 @@
 					kind: {
 						type: 'temporary',
 						data: { name: text }
+					}
+				}
+			]
+		});
+
+		await invalidate(list.url(data.id));
+	}
+
+	async function createProductItem(product_id: string) {
+		await list_items.post(data.id, {
+			data: [
+				{
+					kind: {
+						type: 'product',
+						id: product_id
 					}
 				}
 			]
@@ -192,12 +228,6 @@
 							</div>
 						</TextSlot>
 
-						<!-- {#if item.isle}
-							<TextSlot>
-								<Label>{item.isle}</Label>
-							</TextSlot>
-						{/if} -->
-
 						{#if item.data.kind.type === 'temporary'}
 							<ButtonSlot onclick={() => convertToProduct(item.id)}>
 								<Label>save as product</Label>
@@ -280,28 +310,48 @@
 		</List>
 	</Box>
 
-	<div class="add-item">
-		<div class="input-box">
-			<Box>
-				<div class="input">
-					<TextInput
-						placeholder="add item..."
-						value={addItemInput}
-						oninput={(e) => {
-							addItemInput = e.currentTarget.value;
-						}}
-						onkeypress={(e) => {
-							if (e.key === 'Enter') {
-								createTemporaryItem();
-							}
-						}}
-					/>
-				</div>
-			</Box>
+	<div class="add-item-wrapper">
+		<div class="add-item">
+			<div class="input-box">
+				<Box>
+					<div class="input">
+						<TextInput
+							placeholder="add item..."
+							value={addItemInput}
+							oninput={(e) => {
+								addItemInput = e.currentTarget.value;
+							}}
+							onkeypress={(e) => {
+								if (e.key === 'Enter') {
+									createTemporaryItem();
+								}
+							}}
+						/>
+					</div>
+				</Box>
+			</div>
+			<Button onclick={() => createTemporaryItem()}>
+				<CheckIcon />
+			</Button>
 		</div>
-		<Button onclick={() => createTemporaryItem()}>
-			<CheckIcon />
-		</Button>
+
+		{#if addItemProductMatches && addItemProductMatches.data.length > 0}
+			<Box>
+				<List>
+					{#each addItemProductMatches.data as product (product.id)}
+						<ListItem>
+							<TextButtonSlot
+								onclick={async () => {
+									await createProductItem(product.id);
+									addItemInput = '';
+								}}
+								fill>{product.data.name}</TextButtonSlot
+							>
+						</ListItem>
+					{/each}
+				</List>
+			</Box>
+		{/if}
 	</div>
 </section>
 
@@ -352,14 +402,19 @@
 	.page .empty {
 		text-align: center;
 	}
-	.page .add-item {
+	.page .add-item-wrapper {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5em;
+	}
+	.page .add-item-wrapper .add-item {
 		display: flex;
 		gap: 0.5em;
 	}
-	.page .add-item .input-box {
+	.page .add-item-wrapper .add-item .input-box {
 		flex: 1;
 	}
-	.page .add-item .input-box .input {
+	.page .add-item-wrapper .add-item .input-box .input {
 		display: flex;
 	}
 	.page .highlight {
