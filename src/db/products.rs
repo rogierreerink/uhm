@@ -45,7 +45,8 @@ pub struct ProductDataTemplate<M: Modifier> {
     pub name: M::Data<String>,
     #[serde(default)]
     #[serde(skip_deserializing)]
-    pub list_references: Vec<ListReference>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_references: Option<Vec<ListReference>>,
 }
 
 #[derive(Default, Debug, Deserialize)]
@@ -61,7 +62,7 @@ impl FromRow<'_, PgRow> for Product {
             ts_updated: row.get("ts_updated"),
             data: ProductDataTemplate {
                 name: row.get("name"),
-                list_references: Vec::new(),
+                list_references: None,
             },
         })
     }
@@ -103,7 +104,7 @@ impl Product {
             ts_updated: first.get("ts_updated"),
             data: ProductDataTemplate {
                 name: first.get("name"),
-                list_references: {
+                list_references: Some({
                     let mut items = Vec::new();
 
                     if first.get::<Option<Uuid>, _>("list_id").is_some() {
@@ -122,7 +123,7 @@ impl Product {
 
                         items.push(Self::collect_list(&next, rest).await?);
                     }
-                },
+                }),
             },
         })
     }
