@@ -468,15 +468,21 @@ impl ListItemDbPostgres<'_> {
             },
         };
 
+        if let Some(checked) = update.checked {
+            item.data.checked = checked;
+        }
+
         let row = sqlx::query(
             "
-             UPDATE public.list_items
-             SET ts_updated = NOW()
-             WHERE id = $1
-             RETURNING ts_updated
-             ",
+            UPDATE public.list_items
+            SET checked = $2,
+                ts_updated = NOW()
+            WHERE id = $1
+            RETURNING ts_updated
+            ",
         )
         .bind(id)
+        .bind(item.data.checked)
         .fetch_one(&mut **tx)
         .await?;
 
