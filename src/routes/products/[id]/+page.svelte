@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto, invalidate } from '$app/navigation';
-	import { page } from '$app/state';
 	import Box from '$lib/components/boxes/box.svelte';
 	import { Breadcrumb, BreadcrumbTrail } from '$lib/components/breadcrumb';
 	import { Label, TextInput } from '$lib/components/form';
@@ -8,88 +7,95 @@
 	import { CheckIcon, DeleteIcon, UndoIcon } from '$lib/components/icons';
 	import { Modal, ModalBackdrop } from '$lib/components/modal';
 	import product, { type GetResponse } from '$lib/data/products/resource';
-	import products from '$lib/data/products/collection';
-	import shoppingList from '$lib/data/shopping-list/collection';
-	import shoppingListItem from '$lib/data/shopping-list/resource';
+	import list_items from '$lib/data/lists/items/collection';
+	import list_item from '$lib/data/lists/items/resource';
+	import { type GetResponse as GetListsResponse } from '$lib/data/lists/collection';
 
 	let {
 		data
 	}: {
-		data: GetResponse;
+		data: {
+			product: GetResponse;
+			lists: GetListsResponse;
+		};
 	} = $props();
 
-	let name = $state(data.data.name);
-	let hasChanged = $derived(name !== data.data.name);
+	let name = $state(data.product.data.name);
+	let hasChanged = $derived(name !== data.product.data.name);
 	let confirmDeleteModal = $state(false);
 
 	async function saveChanges() {
-		await product.patch(page.params.id, { name });
-		await invalidate(products.url());
-		await invalidate(product.url(page.params.id));
-		await invalidate(shoppingList.url());
+		await product.patch(data.product.id, { name });
+		await invalidate(product.url(data.product.id));
 	}
 
 	async function revertChanges() {
-		name = data.data.name;
+		name = data.product.data.name;
 	}
 
 	async function deleteProduct() {
-		await product.delete(page.params.id);
+		await product.delete(data.product.id);
 		goto('.', { replaceState: true });
 	}
 
-	async function addShoppingListItem() {
-		await shoppingList.post({
-			data: [{ source: { type: 'product', id: data.id } }]
-		});
-		await invalidate(products.url());
-		await invalidate(product.url(data.id));
-		await invalidate(shoppingList.url());
-	}
-
-	async function unlinkShoppingListItems() {
-		const response = await product.get(data.id);
+	async function unlinkListReferences() {
+		const response = await product.get(data.product.id);
 		if (!response.ok) {
 			return;
 		}
 
-		for (const { id } of response.data.data.shoppingListItemLinks) {
-			await shoppingListItem.patch(id, {
-				source: {
-					type: 'temporary',
-					data: {
-						name: response.data.data.name
+		for (const { id, data } of response.data.data.list_item_references) {
+			const list_id = data.list_reference.id;
+			await list_items.post(list_id, {
+				data: [
+					{
+						kind: {
+							type: 'temporary',
+							data: {
+								name: response.data.data.name
+							}
+						}
 					}
-				}
+				]
 			});
+			await list_item.delete(list_id, id);
 		}
 
-		await invalidate(products.url());
-		await invalidate(product.url(data.id));
-		await invalidate(shoppingList.url());
+		await invalidate(product.url(data.product.id));
 	}
 
-	async function deleteShoppingListItems() {
-		for (const { id } of data.data.shoppingListItemLinks) {
-			await shoppingListItem.delete(id);
-			await invalidate(shoppingListItem.url(id));
-		}
-		await invalidate(products.url());
-		await invalidate(product.url(data.id));
-		await invalidate(shoppingList.url());
+	async function addToList(list_id: string, item_id: string) {
+		await list_items.post(list_id, {
+			data: [
+				{
+					kind: {
+						type: 'product',
+						id: item_id
+					}
+				}
+			]
+		});
+
+		await invalidate(product.url(data.product.id));
+	}
+
+	async function removeFromList(list_id: string, item_id: string) {
+		await list_item.delete(list_id, item_id);
+
+		await invalidate(product.url(data.product.id));
 	}
 </script>
 
 <svelte:head>
-	<title>Products: {data.data.name.toLocaleLowerCase()}</title>
+	<title>Products: {data.product.data.name.toLocaleLowerCase()}</title>
 </svelte:head>
 
 <section class="page">
-	<h1>{data.data.name}</h1>
+	<h1>{data.product.data.name}</h1>
 
 	<BreadcrumbTrail>
 		<Breadcrumb href=".">products</Breadcrumb>
-		<Breadcrumb>{data.data.name.toLocaleLowerCase()}</Breadcrumb>
+		<Breadcrumb>{data.product.data.name.toLocaleLowerCase()}</Breadcrumb>
 	</BreadcrumbTrail>
 
 	<div class="data">
@@ -100,7 +106,7 @@
 					<div class="flex">
 						<TextInput
 							id="name"
-							placeholder={data.data.name}
+							placeholder={data.product.data.name}
 							value={name}
 							oninput={(e) => (name = e.currentTarget.value.trim())}
 						/>
@@ -111,20 +117,31 @@
 	</div>
 
 	<div class="statistics">
-		{#if data.data.shoppingListItemLinks.length > 0}
-			{@const link_count = data.data.shoppingListItemLinks.length}
-			<div>
-				{#if new Intl.PluralRules('en-US').select(link_count) === 'one'}
-					<a href={`/?product-highlight=${data.id}`}>{link_count} reference to shopping list</a>
-					<InlineButton onclick={() => deleteShoppingListItems()}>(delete)</InlineButton>
-				{:else}
-					<a href={`/?product-highlight=${data.id}`}>{link_count} references to shopping list</a>
-					<InlineButton onclick={() => deleteShoppingListItems()}>(delete all)</InlineButton>
-				{/if}
+		{#each data.lists.data as list (list.id)}
+			{@const list_refs = data.product.data.list_item_references.filter(
+				(ref) => ref.data.list_reference.data.name == list.data.name
+			)}
+			<!-- {@const plural = new Intl.PluralRules('en-US').select(list_refs.length) !== 'one'} -->
+			<div class="buttons">
+				<a href={`/lists/${list.id}/?product-highlight=${data.product.id}`}>
+					{#if list_refs.length > 0}
+						{list_refs.length} on
+					{/if}
+					{list.data.name}
+				</a>
+				-
+				<span class:disabled={list_refs.length == 0}>
+					<InlineButton
+						onclick={() => removeFromList(list.id, list_refs[list_refs.length - 1].id)}
+						disabled={list_refs.length == 0}
+					>
+						remove
+					</InlineButton>
+				</span>
+				/
+				<InlineButton onclick={() => addToList(list.id, data.product.id)}>add</InlineButton>
 			</div>
-		{:else}
-			<InlineButton onclick={() => addShoppingListItem()}>Add to shopping list</InlineButton>
-		{/if}
+		{/each}
 	</div>
 
 	<div class="buttons">
@@ -142,8 +159,8 @@
 	</div>
 
 	<div class="metadata">
-		<div>Created: {data.created.toUTCString()}</div>
-		<div>Updated: {data.updated?.toUTCString() ?? 'never'}</div>
+		<div>Created: {data.product.ts_created.toUTCString()}</div>
+		<div>Updated: {data.product.ts_updated?.toUTCString() ?? 'never'}</div>
 	</div>
 </section>
 
@@ -152,23 +169,22 @@
 		<Modal size="small">
 			<div class="confirmation-modal">
 				<div>
-					Are you sure you want to delete <i>{data.data.name}</i>?
+					Are you sure you want to delete <i>{data.product.data.name}</i>?
 				</div>
 
-				{#if data.data.shoppingListItemLinks.length > 0}
+				{#if data.product.data.list_item_references.length > 0}
 					<small>
-						The product is still on your shopping list. Press "unlink and delete" if you want to
-						keep it on your shopping list, but delete the product itself.
+						The product is still on some of your lists. Press "unlink and delete" if you want to
+						keep it there while deleting the product itself.
 					</small>
 				{/if}
 			</div>
 
 			{#snippet footer()}
 				<ButtonGroup>
-					{#if data.data.shoppingListItemLinks.length > 0}
+					{#if data.product.data.list_item_references.length > 0}
 						<Button
 							onclick={async () => {
-								await deleteShoppingListItems();
 								await deleteProduct();
 								confirmDeleteModal = false;
 							}}
@@ -177,7 +193,7 @@
 						</Button>
 						<Button
 							onclick={async () => {
-								await unlinkShoppingListItems();
+								await unlinkListReferences();
 								await deleteProduct();
 								confirmDeleteModal = false;
 							}}
@@ -238,6 +254,15 @@
 		text-align: right;
 		margin: 0.3em 0.4em;
 		color: var(--element-color-500);
+	}
+	.page .statistics .buttons {
+		all: unset;
+		display: block;
+		user-select: none;
+	}
+	.page .statistics .buttons .disabled {
+		color: var(--element-color-600);
+		font-style: italic;
 	}
 	.page .buttons {
 		display: flex;

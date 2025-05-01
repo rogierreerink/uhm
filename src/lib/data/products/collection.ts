@@ -1,31 +1,37 @@
 import { get, host, post, type DataParams, type DataResponse } from '..';
-import type { Pagination } from '../types';
 
 function url(searchParams: URLSearchParams = new URLSearchParams()) {
-	const searchParamsFiltered = new URLSearchParams(
+	searchParams = new URLSearchParams(
 		searchParams
 			.entries()
 			.filter(([key]) => ['name'].includes(key))
 			.toArray()
 	);
 
-	if (searchParamsFiltered.size > 0) {
-		return `${host}/api/products?${searchParamsFiltered.toString()}`;
+	if (searchParams.size > 0) {
+		return `${host}/api/products?${searchParams.toString()}`;
 	} else {
 		return `${host}/api/products`;
 	}
 }
 
 export type GetResponse = {
-	pagination: Pagination;
 	data: {
 		id: string;
 		created: Date;
 		updated?: Date;
 		data: {
 			name: string;
-			shoppingListItemLinks: {
+			list_item_references: {
 				id: string;
+				data: {
+					list_reference: {
+						id: string;
+						data: {
+							name: string;
+						};
+					};
+				};
 			}[];
 		};
 	}[];

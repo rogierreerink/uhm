@@ -5,19 +5,25 @@
 	import { MenuBar, MenuItem } from '$lib/components/menu';
 	import { FixSpace } from '$lib/components/fix';
 	import { afterNavigate, onNavigate } from '$app/navigation';
+	import { type GetResponse as Lists } from '$lib/data/lists/collection';
 
 	let {
-		children
+		children,
+		data
 	}: {
 		children: Snippet;
+		data: { lists: Lists };
 	} = $props();
 
-	const menu = [
-		{ label: 'shopping list', link: '/' },
+	let menu = $derived([
+		...data.lists.data.map((list) => ({
+			label: list.data.name.toLocaleLowerCase(),
+			link: `/lists/${list.id}`
+		})),
 		{ label: 'products', link: '/products' },
 		{ label: 'recipes', link: '/recipes' },
 		{ label: 'elements', link: '/elements' }
-	];
+	]);
 
 	let menuCollapsed = $state(true);
 	let menuCollapseTimer = $state<number>();

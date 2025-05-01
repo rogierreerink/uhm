@@ -1,7 +1,7 @@
 import { del, get, host, patch, type DataParams, type DataResponse } from '..';
 
 function url(id: string) {
-	return `${host}/api/products/${id}`;
+	return `${host}/api/lists/${id}`;
 }
 
 export type GetResponse = {
@@ -10,15 +10,24 @@ export type GetResponse = {
 	ts_updated?: Date;
 	data: {
 		name: string;
-		list_item_references: {
+		items: {
 			id: string;
 			data: {
-				list_reference: {
-					id: string;
-					data: {
-						name: string;
-					};
-				};
+				checked: boolean;
+				kind:
+					| {
+							type: 'product';
+							id: string;
+							data: {
+								name: string;
+							};
+					  }
+					| {
+							type: 'temporary';
+							data: {
+								name: string;
+							};
+					  };
 			};
 		}[];
 	};

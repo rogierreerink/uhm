@@ -17,27 +17,34 @@
 		CheckIcon,
 		DeleteIcon,
 		BasketAddIcon,
-		BasketIcon
+		BasketIcon,
+		AddIcon
 	} from '$lib/components/icons';
 	import { Button, ButtonGroup } from '$lib/components/form/buttons';
 	import { TextInput } from '$lib/components/form';
 	import { Label } from '$lib/components/labels';
-	import shoppingList from '$lib/data/shopping-list/collection';
-	import shoppingListItem from '$lib/data/shopping-list/resource';
+	import list_items from '$lib/data/lists/items/collection';
+	import list_item from '$lib/data/lists/items/resource';
 	import products, { type GetResponse } from '$lib/data/products/collection';
 	import product, { type GetResponse as GetProductResponse } from '$lib/data/products/resource';
+	import { type GetResponse as GetListsResponse } from '$lib/data/lists/collection';
 	import { Modal, ModalBackdrop } from '$lib/components/modal';
 	import type { DataResponse } from '$lib/data';
+	import SubstractIcon from '$lib/components/icons/substract-icon.svelte';
 
 	let {
 		data
 	}: {
-		data: GetResponse;
+		data: {
+			products: GetResponse;
+			lists: GetListsResponse;
+		};
 	} = $props();
 
 	let searchItemInput = $state(page.url.searchParams.get('name') || '');
 	let addItemInput = $state('');
 	let moreDropdownItem = $state<string>();
+	let basketDropdownItem = $state<string>();
 	let swipedItem = $state<{
 		resourceId: string;
 		area: 'left' | 'right';
@@ -77,60 +84,53 @@
 	async function deleteProduct(id: string) {
 		await product.delete(id);
 		await invalidate(products.url(page.url.searchParams));
-		await invalidate(product.url(id));
 	}
 
-	async function unlinkShoppingListItems(id: string) {
+	async function unlinkListReferences(id: string) {
 		const response = await product.get(id);
 		if (!response.ok) {
 			return;
 		}
 
-		for (const { id } of response.data.data.shoppingListItemLinks) {
-			await shoppingListItem.patch(id, {
-				source: {
-					type: 'temporary',
-					data: {
-						name: response.data.data.name
+		for (const { id, data } of response.data.data.list_item_references) {
+			const list_id = data.list_reference.id;
+			await list_items.post(list_id, {
+				data: [
+					{
+						kind: {
+							type: 'temporary',
+							data: {
+								name: response.data.data.name
+							}
+						}
 					}
-				}
+				]
 			});
+			await list_item.delete(list_id, id);
 		}
 
 		await invalidate(products.url(page.url.searchParams));
-		await invalidate(product.url(id));
-		await invalidate(shoppingList.url());
 	}
 
-	async function addToShoppingList(id: string) {
-		await shoppingList.post({
+	async function addToList(list_id: string, item_id: string) {
+		await list_items.post(list_id, {
 			data: [
 				{
-					source: {
+					kind: {
 						type: 'product',
-						id
+						id: item_id
 					}
 				}
 			]
 		});
+
 		await invalidate(products.url(page.url.searchParams));
-		await invalidate(product.url(id));
-		await invalidate(shoppingList.url());
 	}
 
-	async function deleteShoppingListItems(id: string) {
-		const response = await product.get(id);
-		if (!response.ok) {
-			return;
-		}
-
-		for (const { id } of response.data.data.shoppingListItemLinks) {
-			await shoppingListItem.delete(id);
-		}
+	async function removeFromList(list_id: string, item_id: string) {
+		await list_item.delete(list_id, item_id);
 
 		await invalidate(products.url(page.url.searchParams));
-		await invalidate(product.url(id));
-		await invalidate(shoppingList.url());
 	}
 </script>
 
@@ -172,7 +172,7 @@
 
 	<Box>
 		<List>
-			{#each data.data as item, itemIdx (item.id)}
+			{#each data.products.data as item, itemIdx (item.id)}
 				<ListItem>
 					<SwipeSlot
 						show={swipedItem?.resourceId === item.id ? swipedItem.area : undefined}
@@ -207,22 +207,63 @@
 							{item.data.name}
 						</TextAnchorSlot>
 
-						{#if item.data.shoppingListItemLinks.length > 0}
-							<TextAnchorSlot href={`/?product-highlight=${item.id}`}>
-								<Label><BasketIcon /> {item.data.shoppingListItemLinks.length}</Label>
-							</TextAnchorSlot>
-						{:else}
-							<IconButtonSlot onclick={() => addToShoppingList(item.id)}>
-								<BasketAddIcon />
-							</IconButtonSlot>
-						{/if}
+						<DropdownSlot
+							position="to-left"
+							show={basketDropdownItem === item.id}
+							zIndex={data?.products.data.length + 10 - itemIdx}
+							ontoggle={() => {
+								basketDropdownItem = basketDropdownItem !== item.id ? item.id : undefined;
+								moreDropdownItem = undefined;
+							}}
+						>
+							<IconSlot>
+								{#if item.data.list_item_references.length > 0}
+									<Label><BasketIcon /> {item.data.list_item_references.length}</Label>
+								{:else}
+									<BasketAddIcon />
+								{/if}
+							</IconSlot>
+
+							{#snippet dropdown()}
+								<List>
+									{#each data.lists.data as list (list.id)}
+										{@const list_refs = item.data.list_item_references.filter(
+											(ref) => ref.data.list_reference.data.name == list.data.name
+										)}
+
+										<ListItem>
+											<TextAnchorSlot href={`/lists/${list.id}/?product-highlight=${item.id}`} fill>
+												<i>
+													{#if list_refs.length > 0}
+														{list_refs.length} on
+													{/if}
+													{list.data.name}
+												</i>
+											</TextAnchorSlot>
+
+											<IconButtonSlot
+												onclick={() => removeFromList(list.id, list_refs[list_refs.length - 1].id)}
+												disabled={list_refs.length == 0}
+											>
+												<SubstractIcon />
+											</IconButtonSlot>
+
+											<IconButtonSlot onclick={() => addToList(list.id, item.id)}>
+												<AddIcon />
+											</IconButtonSlot>
+										</ListItem>
+									{/each}
+								</List>
+							{/snippet}
+						</DropdownSlot>
 
 						<DropdownSlot
 							position="to-left"
 							show={moreDropdownItem === item.id}
-							zIndex={data?.data.length + 10 - itemIdx}
+							zIndex={data?.products.data.length + 10 - itemIdx}
 							ontoggle={() => {
 								moreDropdownItem = moreDropdownItem !== item.id ? item.id : undefined;
+								basketDropdownItem = undefined;
 							}}
 						>
 							<IconSlot>
@@ -263,7 +304,7 @@
 				</ListItem>
 			{/each}
 
-			{#if data.data.length === 0}
+			{#if data.products.data.length === 0}
 				<ListItem>
 					<TextSlot fill>
 						<div class="not-found">
@@ -312,20 +353,19 @@
 							Are you sure you want to delete <i>{data.data.name}</i>?
 						</div>
 
-						{#if data.data.shoppingListItemLinks.length > 0}
+						{#if data.data.list_item_references.length > 0}
 							<small>
-								The product is still on your shopping list. Press "unlink and delete" if you want to
-								keep it on your shopping list, but delete the product itself.
+								The product is still on some of your lists. Press "unlink and delete" if you want to
+								keep it there while deleting the product itself.
 							</small>
 						{/if}
 					</div>
 
 					{#snippet footer()}
 						<ButtonGroup>
-							{#if data.data.shoppingListItemLinks.length > 0}
+							{#if data.data.list_item_references.length > 0}
 								<Button
 									onclick={async () => {
-										await deleteShoppingListItems(data.id);
 										await deleteProduct(data.id);
 										confirmDeleteModal = undefined;
 									}}
@@ -334,7 +374,7 @@
 								</Button>
 								<Button
 									onclick={async () => {
-										await unlinkShoppingListItems(data.id);
+										await unlinkListReferences(data.id);
 										await deleteProduct(data.id);
 										confirmDeleteModal = undefined;
 									}}
