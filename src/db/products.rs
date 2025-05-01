@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
 
 use super::{
+    list_items::{ListItemDataTemplate, ListItemReference},
     lists::{ListDataTemplate, ListReference},
     DbError,
 };
@@ -43,10 +44,9 @@ pub struct ProductTemplate<M: Modifier> {
 pub struct ProductDataTemplate<M: Modifier> {
     #[serde(skip_serializing_if = "M::skip_data")]
     pub name: M::Data<String>,
-    #[serde(default)]
     #[serde(skip_deserializing)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub list_references: Option<Vec<ListReference>>,
+    pub list_item_references: Option<Vec<ListItemReference>>,
 }
 
 #[derive(Default, Debug, Deserialize)]
@@ -62,7 +62,7 @@ impl FromRow<'_, PgRow> for Product {
             ts_updated: row.get("ts_updated"),
             data: ProductDataTemplate {
                 name: row.get("name"),
-                list_references: None,
+                list_item_references: None,
             },
         })
     }
@@ -104,11 +104,11 @@ impl Product {
             ts_updated: first.get("ts_updated"),
             data: ProductDataTemplate {
                 name: first.get("name"),
-                list_references: Some({
+                list_item_references: Some({
                     let mut items = Vec::new();
 
                     if first.get::<Option<Uuid>, _>("list_id").is_some() {
-                        items.push(Self::collect_list(first, rest).await?);
+                        items.push(Self::collect_list_items(first, rest).await?);
                     }
 
                     loop {
@@ -121,21 +121,28 @@ impl Product {
                             None => break items,
                         };
 
-                        items.push(Self::collect_list(&next, rest).await?);
+                        items.push(Self::collect_list_items(&next, rest).await?);
                     }
                 }),
             },
         })
     }
 
-    async fn collect_list(
+    async fn collect_list_items(
         first: &PgRow,
         _rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
-    ) -> Result<ListReference> {
-        Ok(ListReference {
-            id: first.get("list_id"),
-            data: Some(ListDataTemplate {
-                name: Some(first.get("list_name")),
+    ) -> Result<ListItemReference> {
+        Ok(ListItemReference {
+            id: first.get("list_item_id"),
+            data: Some(ListItemDataTemplate {
+                list_reference: Some(ListReference {
+                    id: first.get("list_id"),
+                    data: Some(ListDataTemplate {
+                        name: first.get("list_name"),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
                 ..Default::default()
             }),
             ..Default::default()
@@ -163,6 +170,7 @@ impl ProductDb for ProductDbPostgres<'_> {
                 products.ts_created,
                 products.ts_updated,
                 products.name,
+                list_items.id AS list_item_id,
                 lists.id AS list_id,
                 lists.name AS list_name
 
@@ -274,6 +282,7 @@ impl ProductDbPostgres<'_> {
                 products.ts_created,
                 products.ts_updated,
                 products.name,
+                list_items.id AS list_item_id,
                 lists.id AS list_id,
                 lists.name AS list_name
 

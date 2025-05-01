@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
 
 use super::{
+    lists::ListReference,
     products::{ProductDataTemplate, ProductReference},
     DbError,
 };
@@ -53,6 +54,9 @@ pub struct ListItemDataTemplate<M: Modifier> {
     pub checked: M::Data<bool>,
     #[serde(skip_serializing_if = "M::skip_data")]
     pub kind: M::Data<ListItemKindTemplate<M>>,
+    #[serde(skip_deserializing)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_reference: Option<ListReference>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -116,6 +120,7 @@ impl FromRow<'_, PgRow> for ListItem {
                         panic!("unreachable!")
                     }
                 },
+                list_reference: None,
             },
         })
     }
@@ -335,6 +340,7 @@ impl ListItemDbPostgres<'_> {
                                 ..Default::default()
                             },
                         },
+                        list_reference: None,
                     },
                 })
             }
@@ -381,6 +387,7 @@ impl ListItemDbPostgres<'_> {
                                 },
                             },
                         },
+                        list_reference: None,
                     },
                 })
             }

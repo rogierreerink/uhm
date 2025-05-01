@@ -42,8 +42,8 @@ pub struct MarkdownDataTemplate<M: Modifier> {
     #[serde(skip_serializing_if = "M::skip_data")]
     pub markdown: M::Data<String>,
     #[serde(skip_deserializing)]
-    #[serde(skip_serializing_if = "M::skip_readonly")]
-    pub html: M::ReadOnly<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub html: Option<String>,
 }
 
 impl FromRow<'_, PgRow> for Markdown {
@@ -55,7 +55,10 @@ impl FromRow<'_, PgRow> for Markdown {
             data: {
                 let markdown = row.get::<String, _>("markdown");
                 let html = markdown_to_html(&markdown);
-                MarkdownDataTemplate { markdown, html }
+                MarkdownDataTemplate {
+                    markdown,
+                    html: Some(html),
+                }
             },
         })
     }
