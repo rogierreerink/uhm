@@ -22,5 +22,9 @@
 		flex-direction: column;
 		justify-content: center;
 		padding: 0.3em 0.4em;
+		color: var(--theme-color-primary-200);
+	}
+	.text::placeholder {
+		color: var(--theme-color-primary-400);
 	}
 </style>

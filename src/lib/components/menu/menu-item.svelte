@@ -29,9 +29,12 @@
 		all: unset;
 		display: block;
 		cursor: pointer;
-		color: var(--element-color-700);
+		color: var(--theme-color-primary-200);
+	}
+	li a:hover {
+		color: var(--theme-color-primary-50);
 	}
 	li a.current {
-		color: var(--element-color-400);
+		text-decoration: underline;
 	}
 </style>

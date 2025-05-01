@@ -22,10 +22,10 @@
 		cursor: pointer;
 	}
 	button:hover {
-		color: var(--element-color-300);
+		color: var(--theme-color-primary-200);
 	}
 	button:active {
-		color: var(--element-color-200);
+		color: var(--theme-color-primary-200);
 	}
 	button:disabled {
 		color: inherit;

@@ -15,8 +15,8 @@
 
 <style>
 	.label {
-		background-color: var(--element-color-700);
-		border: 1px solid var(--element-color-600);
+		background-color: var(--theme-color-primary-800);
+		border: 1px solid var(--theme-color-primary-600);
 		border-radius: 0.125em;
 		padding: 0 0.2em;
 		font-size: 0.8em;

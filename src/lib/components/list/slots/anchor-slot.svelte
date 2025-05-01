@@ -21,14 +21,14 @@
 		all: unset;
 		display: flex;
 		position: relative;
-		color: var(--element-color-400);
+		color: var(--theme-color-primary-200);
 		cursor: pointer;
 	}
 	a:hover {
-		color: var(--element-color-300);
+		color: var(--theme-color-primary-200);
 	}
 	a:active {
-		color: var(--element-color-200);
+		color: var(--theme-color-primary-200);
 	}
 	a.fill {
 		flex: 1;

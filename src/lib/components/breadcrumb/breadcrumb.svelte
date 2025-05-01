@@ -30,7 +30,7 @@
 	.breadcrumb {
 		display: flex;
 		gap: 0.5em;
-		color: var(--element-color-400);
+		color: var(--theme-color-primary-200);
 	}
 	.breadcrumb a.label {
 		all: unset;
@@ -38,10 +38,10 @@
 		cursor: pointer;
 	}
 	.breadcrumb a.label:hover {
-		color: var(--element-color-300);
+		color: var(--theme-color-primary-200);
 	}
 	.breadcrumb a.label:active {
-		color: var(--element-color-200);
+		color: var(--theme-color-primary-200);
 	}
 	.breadcrumb .icon {
 		display: flex;

@@ -23,17 +23,13 @@
 		position: relative;
 		justify-content: center;
 		align-items: center;
-		color: var(--element-color-400);
 		cursor: pointer;
 	}
 	button:hover {
-		color: var(--element-color-300);
-	}
-	button:active {
-		color: var(--element-color-200);
+		color: var(--theme-color-primary-50);
 	}
 	button:disabled {
-		color: var(--element-color-700);
+		color: var(--theme-color-primary-600);
 		cursor: default;
 	}
 	button.fill {

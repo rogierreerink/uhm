@@ -63,7 +63,9 @@
 	<div class="search">
 		<div class="input">
 			<Box>
-				<TextInput placeholder="search items..." />
+				<div class="stretch">
+					<TextInput placeholder="search items..." />
+				</div>
 			</Box>
 		</div>
 		<div class="button">
@@ -293,6 +295,9 @@
 	}
 	.page .search .input {
 		flex: 1;
+	}
+	.page .search .input .stretch {
+		display: flex;
 	}
 	.page .search .button {
 		display: flex;

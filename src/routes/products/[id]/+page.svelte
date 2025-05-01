@@ -246,22 +246,21 @@
 		font-style: italic;
 		text-align: right;
 		margin: 0.3em 0.4em;
-		color: var(--element-color-600);
+		color: var(--theme-color-primary-500);
 	}
 	.page .statistics {
 		display: block;
 		font-size: 0.8em;
 		text-align: right;
 		margin: 0.3em 0.4em;
-		color: var(--element-color-500);
+		color: var(--theme-color-primary-500);
 	}
 	.page .statistics .buttons {
-		all: unset;
 		display: block;
 		user-select: none;
 	}
 	.page .statistics .buttons .disabled {
-		color: var(--element-color-600);
+		color: var(--theme-color-primary-600);
 		font-style: italic;
 	}
 	.page .buttons {

@@ -9,6 +9,6 @@
 	} = $props();
 </script>
 
-<Box --box-background-color="var(--element-color-800)">
+<Box --box-background-color="var(--theme-color-primary-800)">
 	{@render children?.()}
 </Box>

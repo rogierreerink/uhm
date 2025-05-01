@@ -5,7 +5,7 @@
 	let {
 		children,
 		themeVarPrefix = '--theme-color-primary',
-		elementVarPrefix = '--element-color',
+		elementVarPrefix = '--theme-color-primary',
 		brightnessMap = defaultMap
 	}: {
 		children?: Snippet;
