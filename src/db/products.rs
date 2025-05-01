@@ -172,7 +172,9 @@ impl ProductDb for ProductDbPostgres<'_> {
                 products.name,
                 list_items.id AS list_item_id,
                 lists.id AS list_id,
-                lists.name AS list_name
+                lists.name AS list_name,
+
+                similarity($1, products.name) AS match_score
 
             FROM public.products
                 LEFT JOIN public.product_list_items
@@ -182,10 +184,8 @@ impl ProductDb for ProductDbPostgres<'_> {
                 LEFT JOIN public.lists
                     ON list_items.list_id = lists.id
 
-            WHERE
-                products.name ILIKE ('%' || COALESCE($1, '') || '%')
-
             ORDER BY
+                match_score DESC,
                 products.name,
                 lists.name
             ",
