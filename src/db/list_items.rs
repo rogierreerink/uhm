@@ -48,6 +48,7 @@ pub struct ListItemTemplate<M: Modifier> {
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct ListItemDataTemplate<M: Modifier> {
+    #[serde(default)]
     #[serde(skip_serializing_if = "M::skip_data")]
     pub checked: M::Data<bool>,
     #[serde(skip_serializing_if = "M::skip_data")]
