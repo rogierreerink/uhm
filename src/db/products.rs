@@ -1,13 +1,18 @@
+use std::pin::Pin;
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use futures_util::{TryFutureExt, TryStreamExt};
+use futures_util::{stream::Peekable, Stream, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgRow, prelude::FromRow, PgExecutor, PgPool, PgTransaction, Row};
 use uuid::Uuid;
 
 use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
 
-use super::DbError;
+use super::{
+    lists::{ListDataTemplate, ListReference},
+    DbError,
+};
 
 #[trait_variant::make(Send)]
 pub trait ProductDb {
@@ -38,6 +43,9 @@ pub struct ProductTemplate<M: Modifier> {
 pub struct ProductDataTemplate<M: Modifier> {
     #[serde(skip_serializing_if = "M::skip_data")]
     pub name: M::Data<String>,
+    #[serde(default)]
+    #[serde(skip_deserializing)]
+    pub list_references: Vec<ListReference>,
 }
 
 impl FromRow<'_, PgRow> for Product {
@@ -48,7 +56,83 @@ impl FromRow<'_, PgRow> for Product {
             ts_updated: row.get("ts_updated"),
             data: ProductDataTemplate {
                 name: row.get("name"),
+                list_references: Vec::new(),
             },
+        })
+    }
+}
+
+macro_rules! next_matches_first {
+    ($stream:ident, $first:ident, $($column_name:expr),+) => {
+        if let Some(Ok(next)) = $stream.as_mut().peek().await {
+            $(Some(next.get::<Uuid, _>($column_name)) == $first.get($column_name)) && +
+        } else {
+            false
+        }
+    };
+}
+
+impl Product {
+    async fn collect_products(
+        stream: impl Stream<Item = Result<PgRow, sqlx::Error>>,
+    ) -> Result<Vec<Product>> {
+        let mut stream = std::pin::pin!(stream.peekable());
+        let mut items = Vec::new();
+        loop {
+            let next = match stream.as_mut().try_next().await? {
+                Some(next) => next,
+                None => return Ok(items),
+            };
+
+            items.push(Self::collect_product(&next, &mut stream).await?);
+        }
+    }
+
+    async fn collect_product(
+        first: &PgRow,
+        rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+    ) -> Result<Product> {
+        Ok(Product {
+            id: first.get("id"),
+            ts_created: first.get("ts_created"),
+            ts_updated: first.get("ts_updated"),
+            data: ProductDataTemplate {
+                name: first.get("name"),
+                list_references: {
+                    let mut items = Vec::new();
+
+                    if first.get::<Option<Uuid>, _>("list_id").is_some() {
+                        items.push(Self::collect_list(first, rest).await?);
+                    }
+
+                    loop {
+                        if !next_matches_first!(rest, first, "id") {
+                            break items;
+                        }
+
+                        let next = match rest.try_next().await? {
+                            Some(next) => next,
+                            None => break items,
+                        };
+
+                        items.push(Self::collect_list(&next, rest).await?);
+                    }
+                },
+            },
+        })
+    }
+
+    async fn collect_list(
+        first: &PgRow,
+        _rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+    ) -> Result<ListReference> {
+        Ok(ListReference {
+            id: first.get("list_id"),
+            data: Some(ListDataTemplate {
+                name: Some(first.get("list_name")),
+                ..Default::default()
+            }),
+            ..Default::default()
         })
     }
 }
@@ -66,17 +150,32 @@ impl<'a> ProductDbPostgres<'a> {
 impl ProductDb for ProductDbPostgres<'_> {
     async fn get_multiple(&mut self) -> Result<Vec<Product>> {
         let mut conn = self.pool.acquire().await?;
-
-        sqlx::query_as(
+        let stream = sqlx::query(
             "
-            SELECT id, ts_created, ts_updated, name
+            SELECT DISTINCT
+                products.id,
+                products.ts_created,
+                products.ts_updated,
+                products.name,
+                lists.id AS list_id,
+                lists.name AS list_name
+
             FROM public.products
+                LEFT JOIN public.product_list_items
+                    ON products.id = product_list_items.product_id
+                LEFT JOIN public.list_items
+                    ON product_list_items.id = list_items.product_list_item_id
+                LEFT JOIN public.lists
+                    ON list_items.list_id = lists.id
+
+            ORDER BY
+                products.name,
+                lists.name
             ",
         )
-        .fetch(&mut *conn)
-        .try_collect()
-        .map_err(|error| error.into())
-        .await
+        .fetch(&mut *conn);
+
+        Product::collect_products(stream).await
     }
 
     async fn get_by_id(&mut self, id: &Uuid) -> Result<Product> {
@@ -158,20 +257,34 @@ impl ProductDbPostgres<'_> {
     where
         E: PgExecutor<'c>,
     {
-        sqlx::query_as(
+        let stream = sqlx::query(
             "
-            SELECT id, ts_created, ts_updated, name
+            SELECT DISTINCT
+                products.id,
+                products.ts_created,
+                products.ts_updated,
+                products.name,
+                lists.id AS list_id,
+                lists.name AS list_name
+
             FROM public.products
-            WHERE id = $1
+                LEFT JOIN public.product_list_items
+                    ON products.id = product_list_items.product_id
+                LEFT JOIN public.list_items
+                    ON product_list_items.id = list_items.product_list_item_id
+                LEFT JOIN public.lists
+                    ON list_items.list_id = lists.id
+
+            WHERE products.id = $1
             ",
         )
         .bind(id)
-        .fetch_one(executor)
-        .map_err(|error| match error {
-            sqlx::Error::RowNotFound => Into::<anyhow::Error>::into(DbError::NotFound),
-            _ => error.into(),
-        })
-        .await
+        .fetch(executor);
+
+        match Product::collect_products(stream).await?.pop() {
+            Some(item) => Ok(item),
+            None => Err((DbError::NotFound).into()),
+        }
     }
 
     async fn update_by_id(
