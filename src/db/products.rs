@@ -16,7 +16,7 @@ use super::{
 
 #[trait_variant::make(Send)]
 pub trait ProductDb {
-    async fn get_multiple(&mut self) -> Result<Vec<Product>>;
+    async fn get_multiple(&mut self, params: SearchParams) -> Result<Vec<Product>>;
     async fn get_by_id(&mut self, id: &Uuid) -> Result<Product>;
     async fn create_multiple(&mut self, items: Vec<ProductCreate>) -> Result<Vec<Product>>;
     async fn update_by_id(&mut self, id: &Uuid, item: ProductUpdate) -> Result<Product>;
@@ -46,6 +46,11 @@ pub struct ProductDataTemplate<M: Modifier> {
     #[serde(default)]
     #[serde(skip_deserializing)]
     pub list_references: Vec<ListReference>,
+}
+
+#[derive(Default, Debug, Deserialize)]
+pub struct SearchParams {
+    pub name: Option<String>,
 }
 
 impl FromRow<'_, PgRow> for Product {
@@ -148,7 +153,7 @@ impl<'a> ProductDbPostgres<'a> {
 }
 
 impl ProductDb for ProductDbPostgres<'_> {
-    async fn get_multiple(&mut self) -> Result<Vec<Product>> {
+    async fn get_multiple(&mut self, params: SearchParams) -> Result<Vec<Product>> {
         let mut conn = self.pool.acquire().await?;
         let stream = sqlx::query(
             "
@@ -168,11 +173,15 @@ impl ProductDb for ProductDbPostgres<'_> {
                 LEFT JOIN public.lists
                     ON list_items.list_id = lists.id
 
+            WHERE
+                products.name ILIKE ('%' || COALESCE($1, '') || '%')
+
             ORDER BY
                 products.name,
                 lists.name
             ",
         )
+        .bind(params.name)
         .fetch(&mut *conn);
 
         Product::collect_products(stream).await
