@@ -202,7 +202,7 @@ impl Page {
                 ingredients: Some({
                     let mut items = vec![Self::collect_ingredient(first, rest).await?];
                     loop {
-                        if !next_matches_first!(rest, first, "id", "ingredient_collection_id") {
+                        if !next_matches_first!(rest, first, "id", "block_id") {
                             break items;
                         }
 
@@ -243,13 +243,7 @@ impl Page {
                     }
 
                     loop {
-                        if !next_matches_first!(
-                            rest,
-                            first,
-                            "id",
-                            "ingredient_collection_id",
-                            "ingredient_id"
-                        ) {
+                        if !next_matches_first!(rest, first, "id", "block_id", "ingredient_id") {
                             break items;
                         }
 
@@ -284,7 +278,7 @@ impl Page {
                                 rest,
                                 first,
                                 "id",
-                                "ingredient_collection_id",
+                                "block_id",
                                 "ingredient_id",
                                 "ingredient_list_id"
                             ) {
