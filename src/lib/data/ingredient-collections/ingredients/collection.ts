@@ -1,7 +1,7 @@
 import { get, host, post, type DataParams, type DataResponse } from '../..';
 
-function url(list_id: string) {
-	return `${host}/api/lists/${list_id}/items`;
+function url(collectionId: string) {
+	return `${host}/api/ingredient-collections/${collectionId}/ingredients`;
 }
 
 export type GetResponse = {
@@ -10,62 +10,42 @@ export type GetResponse = {
 		ts_created: Date;
 		ts_updated?: Date;
 		data: {
-			checked: boolean;
-			kind:
-				| {
-						type: 'ingredient';
-						id: string;
-				  }
-				| {
-						type: 'product';
-						id: string;
-						data: {
-							name: string;
-						};
-				  }
-				| {
-						type: 'temporary';
-						data: {
-							name: string;
-						};
-				  };
+			product: {
+				id: string;
+				data: {
+					name: string;
+				};
+			};
 		};
 	}[];
 };
 
 export type PostRequest = {
 	data: {
-		kind:
-			| {
-					type: 'ingredient';
-					id: string;
-			  }
-			| {
-					type: 'product';
-					id: string;
-			  }
-			| {
-					type: 'temporary';
-					data: {
-						name: string;
-					};
-			  };
+		product: {
+			id: string;
+		};
 	}[];
 };
 
 export type PostResponse = {
 	data: {
 		id: string;
+		data: {
+			product: {
+				id: string;
+			};
+		};
 	}[];
 };
 
 export default {
-	url: (list_id: string) => {
-		return url(list_id);
+	url: (collectionId: string) => {
+		return url(collectionId);
 	},
 
-	get: async (list_id: string, params?: DataParams): Promise<DataResponse<GetResponse>> => {
-		const response = await get<GetResponse>(url(list_id), params);
+	get: async (collectionId: string, params?: DataParams): Promise<DataResponse<GetResponse>> => {
+		const response = await get<GetResponse>(url(collectionId), params);
 
 		if (!response.ok) {
 			return response;

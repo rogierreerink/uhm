@@ -1,53 +1,17 @@
 import { del, get, host, patch, type DataParams, type DataResponse } from '..';
 
 function url(id: string) {
-	return `${host}/api/lists/${id}`;
+	return `${host}/api/ingredient-collections/${id}`;
 }
 
 export type GetResponse = {
 	id: string;
 	ts_created: Date;
 	ts_updated?: Date;
-	data: {
-		name: string;
-		items: {
-			id: string;
-			data: {
-				checked: boolean;
-				kind:
-					| {
-							type: 'ingredient';
-							id: string;
-							data: {
-								product: {
-									id: string;
-									data: {
-										name: string;
-									};
-								};
-							};
-					  }
-					| {
-							type: 'product';
-							id: string;
-							data: {
-								name: string;
-							};
-					  }
-					| {
-							type: 'temporary';
-							data: {
-								name: string;
-							};
-					  };
-			};
-		}[];
-	};
+	data: object;
 };
 
-export type PatchRequest = {
-	name?: string;
-};
+export type PatchRequest = object;
 
 export default {
 	url: (id: string) => {

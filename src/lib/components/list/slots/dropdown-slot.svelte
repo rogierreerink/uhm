@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { DropdownBox } from '$lib/components/boxes';
-	import { unfoldHeight } from '$lib/transitions';
 	import type { Snippet } from 'svelte';
 	import ButtonSlot from './button-slot.svelte';
 
@@ -10,7 +9,8 @@
 		fill = false,
 		position = 'to-right',
 		show = false,
-		zIndex = 0,
+		zIndex = 2,
+		backdropZIndex = zIndex - 1,
 		ontoggle
 	}: {
 		children?: Snippet;
@@ -19,11 +19,12 @@
 		position?: 'to-right' | 'to-left';
 		show?: Boolean;
 		zIndex?: number;
+		backdropZIndex?: number;
 		ontoggle?: () => void;
 	} = $props();
 </script>
 
-<div class="slot" class:fill>
+<div class="slot" class:fill style={`z-index:${zIndex}`}>
 	<ButtonSlot onclick={() => ontoggle?.()} fill>
 		{@render children?.()}
 	</ButtonSlot>
@@ -33,16 +34,22 @@
 			class="dropdown-area"
 			class:to-left={position === 'to-left'}
 			class:to-right={position === 'to-right'}
-			style={`z-index:${zIndex}`}
 		>
 			<DropdownBox>
-				<div transition:unfoldHeight>
-					{@render dropdown?.()}
-				</div>
+				{@render dropdown?.()}
 			</DropdownBox>
 		</div>
 	{/if}
 </div>
+
+{#if show}
+	<div
+		class="backdrop"
+		style={`z-index: ${backdropZIndex}`}
+		onclick={() => ontoggle?.()}
+		role="presentation"
+	></div>
+{/if}
 
 <style>
 	.slot {
@@ -63,5 +70,9 @@
 	}
 	.slot.fill {
 		flex: 1;
+	}
+	.backdrop {
+		position: fixed;
+		inset: 0;
 	}
 </style>

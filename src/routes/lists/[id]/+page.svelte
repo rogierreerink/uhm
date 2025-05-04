@@ -31,7 +31,6 @@
 	} = $props();
 
 	let addItemInput = $state('');
-	let qtyDropdownItem = $state<string>();
 	let moreDropdownItem = $state<string>();
 	let swipedItem = $state<{
 		id: string;
@@ -49,7 +48,7 @@
 			return;
 		}
 
-		let product_matches = products
+		products
 			.get(
 				new URLSearchParams({
 					name: addItemInput
@@ -84,18 +83,17 @@
 		await invalidate(list.url(data.id));
 	}
 
-	async function createProductItem(product_id: string) {
+	async function createProductItem(productId: string) {
 		await list_items.post(data.id, {
 			data: [
 				{
 					kind: {
 						type: 'product',
-						id: product_id
+						id: productId
 					}
 				}
 			]
 		});
-
 		await invalidate(list.url(data.id));
 	}
 
@@ -182,51 +180,29 @@
 							swipedItem = undefined;
 						}}
 					>
-						<!-- <DropdownSlot>
-							<ButtonSlot
-								onclick={() =>
-									(qtyDropdownItem = qtyDropdownItem !== itemIdx ? itemIdx : undefined)}
-							>
-								<TextSlot>{item.qty}</TextSlot>
-							</ButtonSlot>
-
-							{#snippet dropdown()}
-								{#if qtyDropdownItem === itemIdx}
-									<div class="dropdown" style={`z-index: ${items.length + 10 - itemIdx}`}>
-										<Dropdown>
-											<div transition:unfoldHeight>
-												<List>
-													<ListItem>
-														<ButtonSlot>
-															<IconSlot>
-																<SubstractIcon />
-															</IconSlot>
-														</ButtonSlot>
-														<Slot>
-															<TextInput size={5} value={item.qty} />
-														</Slot>
-														<ButtonSlot>
-															<IconSlot>
-																<AddIcon />
-															</IconSlot>
-														</ButtonSlot>
-													</ListItem>
-												</List>
-											</div>
-										</Dropdown>
-									</div>
-								{/if}
-							{/snippet}
-						</DropdownSlot> -->
-
-						<TextSlot fill>
+						<TextAnchorSlot
+							fill
+							href={item.data.kind.type === 'ingredient'
+								? `/products/${item.data.kind.data.product.id}`
+								: item.data.kind.type === 'product'
+									? `/products/${item.data.kind.id}`
+									: undefined}
+						>
 							<div
-								class:highlight={item.data.kind.type === 'product' &&
-									item.data.kind.id === page.url.searchParams.get('product-highlight')}
+								class:highlight={(item.data.kind.type === 'ingredient' &&
+									item.data.kind.id === page.url.searchParams.get('ingredient-highlight')) ||
+									(item.data.kind.type === 'product' &&
+										item.data.kind.id === page.url.searchParams.get('product-highlight'))}
 							>
-								{item.data.kind.data.name}
+								{#if item.data.kind.type === 'ingredient'}
+									{item.data.kind.data.product.data.name}
+								{:else if item.data.kind.type === 'product'}
+									{item.data.kind.data.name}
+								{:else if item.data.kind.type === 'temporary'}
+									{item.data.kind.data.name}
+								{/if}
 							</div>
-						</TextSlot>
+						</TextAnchorSlot>
 
 						{#if item.data.kind.type === 'temporary'}
 							<ButtonSlot onclick={() => convertToProduct(item.id)}>

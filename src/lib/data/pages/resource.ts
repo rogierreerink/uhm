@@ -1,7 +1,8 @@
 import { del, get, host, patch, type DataParams, type DataResponse } from '..';
+import type { PageType } from './collection';
 
 function url(id: string) {
-	return `${host}/api/lists/${id}`;
+	return `${host}/api/pages/${id}`;
 }
 
 export type GetResponse = {
@@ -9,35 +10,44 @@ export type GetResponse = {
 	ts_created: Date;
 	ts_updated?: Date;
 	data: {
+		type: PageType;
 		name: string;
-		items: {
+		blocks: {
 			id: string;
 			data: {
-				checked: boolean;
 				kind:
 					| {
-							type: 'ingredient';
+							type: 'markdown';
 							id: string;
 							data: {
-								product: {
+								markdown: string;
+								html: string;
+							};
+					  }
+					| {
+							type: 'ingredient_collection';
+							id: string;
+							data: {
+								ingredients: {
 									id: string;
 									data: {
-										name: string;
+										product: {
+											id: string;
+											data: {
+												name: string;
+											};
+										};
+										list_references: {
+											id: string;
+											data: {
+												name: string;
+												items: {
+													id: string;
+												}[];
+											};
+										}[];
 									};
-								};
-							};
-					  }
-					| {
-							type: 'product';
-							id: string;
-							data: {
-								name: string;
-							};
-					  }
-					| {
-							type: 'temporary';
-							data: {
-								name: string;
+								}[];
 							};
 					  };
 			};
@@ -46,7 +56,11 @@ export type GetResponse = {
 };
 
 export type PatchRequest = {
+	type: PageType;
 	name?: string;
+	blocks: {
+		id: string;
+	}[];
 };
 
 export default {

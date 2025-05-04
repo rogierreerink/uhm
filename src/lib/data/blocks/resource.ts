@@ -1,7 +1,7 @@
 import { del, get, host, patch, type DataParams, type DataResponse } from '..';
 
 function url(id: string) {
-	return `${host}/api/lists/${id}`;
+	return `${host}/api/blocks/${id}`;
 }
 
 export type GetResponse = {
@@ -9,44 +9,32 @@ export type GetResponse = {
 	ts_created: Date;
 	ts_updated?: Date;
 	data: {
-		name: string;
-		items: {
-			id: string;
-			data: {
-				checked: boolean;
-				kind:
-					| {
-							type: 'ingredient';
-							id: string;
-							data: {
-								product: {
-									id: string;
-									data: {
-										name: string;
-									};
-								};
-							};
-					  }
-					| {
-							type: 'product';
-							id: string;
-							data: {
-								name: string;
-							};
-					  }
-					| {
-							type: 'temporary';
-							data: {
-								name: string;
-							};
-					  };
-			};
-		}[];
+		kind:
+			| {
+					type: 'markdown';
+					id: string;
+					data: {
+						markdown: string;
+						html: string;
+					};
+			  }
+			| {
+					type: 'recipe_collection';
+					id: string;
+			  };
 	};
 };
 
 export type PatchRequest = {
-	name?: string;
+	kind:
+		| {
+				type: 'markdown';
+				id: string;
+		  }
+		| {
+				type: 'recipe_collection';
+				id: string;
+		  };
 };
 
 export default {
