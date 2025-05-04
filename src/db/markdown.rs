@@ -193,6 +193,7 @@ impl MarkdownDbPostgres<'_> {
         let mut item = Self::get_by_id(&mut **tx, id).await?;
 
         if let Some(markdown) = update.markdown {
+            item.data.html = Some(markdown_to_html(&markdown));
             item.data.markdown = markdown;
         }
 
