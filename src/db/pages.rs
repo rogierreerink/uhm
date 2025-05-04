@@ -133,8 +133,8 @@ impl Page {
             data: PageDataTemplate {
                 r#type: first.get("type"),
                 name: first.get("name"),
-                blocks: if !summary {
-                    let mut items = vec![Self::collect_page_block(first, rest).await?];
+                blocks: {
+                    let mut items = vec![Self::collect_page_block(first, rest, summary).await?];
                     loop {
                         if !next_matches_first!(rest, first, "id") {
                             break items;
@@ -145,10 +145,8 @@ impl Page {
                             None => break items,
                         };
 
-                        items.push(Self::collect_page_block(&next, rest).await?);
+                        items.push(Self::collect_page_block(&next, rest, summary).await?);
                     }
-                } else {
-                    Vec::new()
                 },
             },
         })
@@ -157,31 +155,36 @@ impl Page {
     async fn collect_page_block(
         first: &PgRow,
         rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+        summary: bool,
     ) -> Result<PageBlockTemplate<Query>> {
         Ok(PageBlockTemplate {
             link_id: first.get("page_block_id"),
             block: BlockReference {
                 id: first.get("block_id"),
-                data: Some(BlockDataTemplate::<Reference> {
-                    kind: Some({
-                        if let Some(id) = first.get("ingredient_collection_block_id") {
-                            BlockKindTemplate::IngredientCollection {
-                                link_id: id,
-                                ingredient_collection: Some(
-                                    Self::collect_ingredient_collection(first, rest).await?,
-                                ),
+                data: if !summary {
+                    Some(BlockDataTemplate::<Reference> {
+                        kind: Some({
+                            if let Some(id) = first.get("ingredient_collection_block_id") {
+                                BlockKindTemplate::IngredientCollection {
+                                    link_id: id,
+                                    ingredient_collection: Some(
+                                        Self::collect_ingredient_collection(first, rest).await?,
+                                    ),
+                                }
+                            } else if let Some(id) = first.get("markdown_block_id") {
+                                BlockKindTemplate::Markdown {
+                                    link_id: id,
+                                    markdown: Some(Self::collect_markdown(first, rest).await?),
+                                }
+                            } else {
+                                panic!("unreachable!")
                             }
-                        } else if let Some(id) = first.get("markdown_block_id") {
-                            BlockKindTemplate::Markdown {
-                                link_id: id,
-                                markdown: Some(Self::collect_markdown(first, rest).await?),
-                            }
-                        } else {
-                            panic!("unreachable!")
-                        }
-                    }),
-                    ..Default::default()
-                }),
+                        }),
+                        ..Default::default()
+                    })
+                } else {
+                    None
+                },
                 ..Default::default()
             },
         })
@@ -275,8 +278,16 @@ impl PageDb for PageDbPostgres<'_> {
                 pages.ts_created,
                 pages.ts_updated,
                 pages.type,
-                pages.name
+                pages.name,
+                page_blocks.id AS page_block_id,
+                blocks.id AS block_id
+
             FROM public.pages
+                LEFT JOIN public.page_blocks
+                    ON pages.id = page_blocks.page_id
+                LEFT JOIN public.blocks
+                    ON page_blocks.block_id = blocks.id
+
             WHERE pages.type = $1 OR $1 IS NULL
             ORDER BY pages.name
             ",
