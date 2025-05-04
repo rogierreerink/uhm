@@ -1,8 +1,9 @@
-use crate::db::pages::{PageCreate, PageDb};
+use crate::db::pages::{PageCreate, PageDb, SearchParams};
 use crate::global::AppState;
 use crate::utilities::request::collection::{GetResponse, PostRequest, PostResponse};
 use crate::{api::handle_options, db::Db};
 
+use axum::extract::Query;
 use axum::{
     extract::State,
     http::{header, HeaderValue, StatusCode},
@@ -38,10 +39,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
 #[axum::debug_handler]
 #[instrument(skip(state))]
-pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+pub async fn get_collection(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<SearchParams>,
+) -> impl IntoResponse {
     let mut db = state.db().pages();
 
-    let items = match db.get_multiple().await {
+    let items = match db.get_multiple(query).await {
         Ok(items) => items,
         Err(err) => {
             tracing::error!("failed to get items: {:?}", err);

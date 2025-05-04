@@ -13,7 +13,7 @@ pub trait Modifier {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Default, Debug, Serialize)]
 pub struct Query;
 
 impl Modifier for Query {
