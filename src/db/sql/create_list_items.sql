@@ -1,5 +1,16 @@
 DO $$ BEGIN
 
+    -- Table: ingredient_list_items
+
+    CREATE TABLE IF NOT EXISTS public.ingredient_list_items ();
+
+    ALTER TABLE public.ingredient_list_items
+        ADD IF NOT EXISTS id UUID NOT NULL PRIMARY KEY,
+        ADD IF NOT EXISTS ts_created TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        ADD IF NOT EXISTS ts_updated TIMESTAMP WITH TIME ZONE,
+        ADD IF NOT EXISTS ingredient_id UUID REFERENCES public.ingredients (id)
+            ON DELETE CASCADE;
+
     -- Table: product_list_items
 
     CREATE TABLE IF NOT EXISTS public.product_list_items ();
@@ -32,6 +43,8 @@ DO $$ BEGIN
         ADD IF NOT EXISTS checked BOOLEAN NOT NULL DEFAULT FALSE,
         ADD IF NOT EXISTS list_id UUID NOT NULL REFERENCES public.lists (id)
             ON DELETE CASCADE,
+        ADD IF NOT EXISTS ingredient_list_item_id UUID UNIQUE REFERENCES public.ingredient_list_items (id)
+            ON DELETE CASCADE,
         ADD IF NOT EXISTS product_list_item_id UUID UNIQUE REFERENCES public.product_list_items (id)
             ON DELETE CASCADE,
         ADD IF NOT EXISTS temporary_list_item_id UUID UNIQUE REFERENCES public.temporary_list_items (id)
@@ -39,6 +52,7 @@ DO $$ BEGIN
 
         DROP CONSTRAINT IF EXISTS holds_exactly_one_list_item_reference,
         ADD CONSTRAINT holds_exactly_one_list_item_reference CHECK (
+            (ingredient_list_item_id IS NOT NULL)::INTEGER +
             (product_list_item_id IS NOT NULL)::INTEGER +
             (temporary_list_item_id IS NOT NULL)::INTEGER = 1
         );
@@ -52,6 +66,13 @@ RETURNS TRIGGER
 LANGUAGE plpgsql AS $$
     DECLARE
     BEGIN
+        -- Delete ingredient list item
+        IF OLD.ingredient_list_item_id IS NOT NULL THEN
+            DELETE FROM public.ingredient_list_items
+            WHERE id = OLD.ingredient_list_item_id;
+            RETURN OLD;
+        END IF;
+
         -- Delete product list item
         IF OLD.product_list_item_id IS NOT NULL THEN
             DELETE FROM public.product_list_items

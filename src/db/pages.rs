@@ -19,6 +19,7 @@ use super::{
     blocks::{BlockDataTemplate, BlockKindTemplate, BlockReference},
     ingredient_collections::{IngredientCollectionDataTemplate, IngredientCollectionReference},
     ingredients::{IngredientDataTemplate, IngredientReference},
+    lists::{ListDataTemplate, ListReference},
     markdown::{MarkdownDataTemplate, MarkdownReference},
     products::{ProductDataTemplate, ProductReference},
     DbError,
@@ -220,7 +221,7 @@ impl Page {
 
     async fn collect_ingredient(
         first: &PgRow,
-        _rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+        rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
     ) -> Result<IngredientReference> {
         Ok(IngredientReference {
             id: first.get("ingredient_id"),
@@ -233,6 +234,47 @@ impl Page {
                     }),
                     ..Default::default()
                 }),
+                list_references: Some({
+                    let mut items = Vec::new();
+
+                    if first.get::<Option<Uuid>, _>("ingredient_list_id").is_some() {
+                        items.push(Self::collect_ingredient_list_refs(first, rest).await?);
+                    }
+
+                    loop {
+                        if !next_matches_first!(
+                            rest,
+                            first,
+                            "id",
+                            "ingredient_collection_id",
+                            "ingredient_id"
+                        ) {
+                            break items;
+                        }
+
+                        let next = match rest.try_next().await? {
+                            Some(next) => next,
+                            None => break items,
+                        };
+
+                        items.push(Self::collect_ingredient_list_refs(&next, rest).await?);
+                    }
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
+
+    async fn collect_ingredient_list_refs(
+        first: &PgRow,
+        _rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
+    ) -> Result<ListReference> {
+        Ok(ListReference {
+            id: first.get("ingredient_list_id"),
+            data: Some(ListDataTemplate {
+                name: Some(first.get("ingredient_list_name")),
+                ..Default::default()
             }),
             ..Default::default()
         })
@@ -369,17 +411,20 @@ impl PageDbPostgres<'_> {
     {
         let stream = sqlx::query(
             "
-            SELECT
+            SELECT DISTINCT
                 pages.id,
                 pages.ts_created,
                 pages.ts_updated,
                 pages.type,
                 pages.name,
                 page_blocks.id AS page_block_id,
+                page_blocks.sequence_number AS page_block_seq,
                 blocks.id AS block_id,
                 ingredient_collection_blocks.id AS ingredient_collection_block_id,
                 ingredient_collections.id AS ingredient_collection_id,
                 ingredients.id AS ingredient_id,
+                ingredient_lists.id AS ingredient_list_id,
+                ingredient_lists.name AS ingredient_list_name,
                 products.id AS product_id,
                 products.name AS product_name,
                 markdown_blocks.id AS markdown_block_id,
@@ -400,6 +445,12 @@ impl PageDbPostgres<'_> {
                     ON ingredient_collections.id = ingredients.ingredient_collection_id
                 LEFT JOIN public.products
                     ON ingredients.product_id = products.id
+                LEFT JOIN public.ingredient_list_items
+                    ON ingredients.id = ingredient_list_items.ingredient_id
+                LEFT JOIN public.list_items
+                    ON ingredient_list_items.id = list_items.ingredient_list_item_id
+                LEFT JOIN public.lists AS ingredient_lists
+                    ON list_items.list_id = ingredient_lists.id
 
                 LEFT JOIN public.markdown_blocks
                     ON blocks.markdown_block_id = markdown_blocks.id

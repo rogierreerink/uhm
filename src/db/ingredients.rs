@@ -8,6 +8,8 @@ use uuid::Uuid;
 use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
 
 use super::{
+    ingredient_collections::IngredientCollectionReference,
+    lists::ListReference,
     products::{ProductDataTemplate, ProductReference},
     DbError,
 };
@@ -50,6 +52,12 @@ pub struct IngredientTemplate<M: Modifier> {
 pub struct IngredientDataTemplate<M: Modifier> {
     #[serde(skip_serializing_if = "M::skip_data")]
     pub product: M::Data<ProductReference>,
+    #[serde(skip_deserializing)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collection_reference: Option<IngredientCollectionReference>,
+    #[serde(skip_deserializing)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_references: Option<Vec<ListReference>>,
 }
 
 impl FromRow<'_, PgRow> for Ingredient {
@@ -67,6 +75,7 @@ impl FromRow<'_, PgRow> for Ingredient {
                     }),
                     ..Default::default()
                 },
+                ..Default::default()
             },
         })
     }
@@ -245,6 +254,7 @@ impl IngredientDbPostgres<'_> {
                     id: create.product.id,
                     ..Default::default()
                 },
+                ..Default::default()
             },
         })
     }

@@ -108,7 +108,7 @@ impl Product {
                     let mut items = Vec::new();
 
                     if first.get::<Option<Uuid>, _>("list_id").is_some() {
-                        items.push(Self::collect_list_items(first, rest).await?);
+                        items.push(Self::collect_list_item_refs(first, rest).await?);
                     }
 
                     loop {
@@ -121,14 +121,14 @@ impl Product {
                             None => break items,
                         };
 
-                        items.push(Self::collect_list_items(&next, rest).await?);
+                        items.push(Self::collect_list_item_refs(&next, rest).await?);
                     }
                 }),
             },
         })
     }
 
-    async fn collect_list_items(
+    async fn collect_list_item_refs(
         first: &PgRow,
         _rest: &mut Pin<&mut Peekable<impl Stream<Item = Result<PgRow, sqlx::Error>>>>,
     ) -> Result<ListItemReference> {

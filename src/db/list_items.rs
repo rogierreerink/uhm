@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
 
 use super::{
+    ingredients::{IngredientDataTemplate, IngredientReference},
     lists::ListReference,
     products::{ProductDataTemplate, ProductReference},
     DbError,
@@ -62,6 +63,12 @@ pub struct ListItemDataTemplate<M: Modifier> {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ListItemKindTemplate<M: Modifier> {
+    Ingredient {
+        #[serde(skip)]
+        link_id: M::Meta<Uuid>,
+        #[serde(flatten)]
+        ingredient: M::Data<IngredientReference>,
+    },
     Product {
         #[serde(skip)]
         link_id: M::Meta<Uuid>,
@@ -95,7 +102,18 @@ impl FromRow<'_, PgRow> for ListItem {
             data: ListItemDataTemplate {
                 checked: row.get("checked"),
                 kind: {
-                    if let Some(id) = row.get("product_list_item_id") {
+                    if let Some(id) = row.get("ingredient_list_item_id") {
+                        ListItemKindTemplate::Ingredient {
+                            link_id: id,
+                            ingredient: IngredientReference {
+                                id: row.get("ingredient_id"),
+                                data: Some(IngredientDataTemplate {
+                                    ..Default::default()
+                                }),
+                                ..Default::default()
+                            },
+                        }
+                    } else if let Some(id) = row.get("product_list_item_id") {
                         ListItemKindTemplate::Product {
                             link_id: id,
                             product: ProductReference {
@@ -147,6 +165,8 @@ impl ListItemDb for ListItemDbPostgres<'_> {
                 list_items.ts_created,
                 list_items.ts_updated,
                 list_items.checked,
+                ingredient_list_items.id AS ingredient_list_item_id,
+                ingredients.id AS ingredient_id,
                 product_list_items.id AS product_list_item_id,
                 products.id AS product_id,
                 products.name AS product_name,
@@ -154,10 +174,16 @@ impl ListItemDb for ListItemDbPostgres<'_> {
                 temporary_list_items.name AS temporary_list_item_name
 
             FROM public.list_items
+                LEFT JOIN public.ingredient_list_items
+                    ON list_items.ingredient_list_item_id = ingredient_list_items.id
+                LEFT JOIN public.ingredients
+                    ON ingredient_list_items.ingredient_id = ingredients.id
+
                 LEFT JOIN public.product_list_items
                     ON list_items.product_list_item_id = product_list_items.id
                 LEFT JOIN public.products
                     ON product_list_items.product_id = products.id
+
                 LEFT JOIN public.temporary_list_items
                     ON list_items.temporary_list_item_id = temporary_list_items.id
 
@@ -260,6 +286,8 @@ impl ListItemDbPostgres<'_> {
                 list_items.ts_created,
                 list_items.ts_updated,
                 list_items.checked,
+                ingredient_list_items.id AS ingredient_list_item_id,
+                ingredients.id AS ingredient_id,
                 product_list_items.id AS product_list_item_id,
                 products.id AS product_id,
                 products.name AS product_name,
@@ -267,10 +295,16 @@ impl ListItemDbPostgres<'_> {
                 temporary_list_items.name AS temporary_list_item_name
 
             FROM public.list_items
+                LEFT JOIN public.ingredient_list_items
+                    ON list_items.ingredient_list_item_id = ingredient_list_items.id
+                LEFT JOIN public.ingredients
+                    ON ingredient_list_items.ingredient_id = ingredients.id
+
                 LEFT JOIN public.product_list_items
                     ON list_items.product_list_item_id = product_list_items.id
                 LEFT JOIN public.products
                     ON product_list_items.product_id = products.id
+
                 LEFT JOIN public.temporary_list_items
                     ON list_items.temporary_list_item_id = temporary_list_items.id
 
@@ -299,6 +333,52 @@ impl ListItemDbPostgres<'_> {
         create: ListItemCreate,
     ) -> Result<ListItem> {
         match create.kind {
+            ListItemKindTemplate::Ingredient { ingredient, .. } => {
+                let link_id = Uuid::new_v4();
+                let _ = sqlx::query(
+                    "
+                    INSERT INTO public.ingredient_list_items (id, ingredient_id)
+                    VALUES ($1, $2)
+                    ",
+                )
+                .bind(link_id)
+                .bind(ingredient.id)
+                .execute(&mut **tx)
+                .await?;
+
+                let item_id = Uuid::new_v4();
+                let item = sqlx::query(
+                    "
+                    INSERT INTO public.list_items (id, list_id, checked, ingredient_list_item_id)
+                    VALUES ($1, $2, $3, $4)
+                    RETURNING ts_created, checked
+                    ",
+                )
+                .bind(item_id)
+                .bind(list_id)
+                .bind(create.checked)
+                .bind(link_id)
+                .fetch_one(&mut **tx)
+                .await?;
+
+                Ok(ListItem {
+                    id: item_id,
+                    ts_created: item.get("ts_created"),
+                    ts_updated: None,
+                    data: ListItemDataTemplate {
+                        checked: item.get("checked"),
+                        kind: ListItemKindTemplate::Ingredient {
+                            link_id,
+                            ingredient: IngredientReference {
+                                id: ingredient.id,
+                                ..Default::default()
+                            },
+                        },
+                        list_reference: None,
+                    },
+                })
+            }
+
             ListItemKindTemplate::Product { product, .. } => {
                 let link_id = Uuid::new_v4();
                 let _ = sqlx::query(
@@ -403,6 +483,41 @@ impl ListItemDbPostgres<'_> {
         let mut item = Self::get_by_id(&mut **tx, list_id, id).await?;
 
         match &mut item.data.kind {
+            ListItemKindTemplate::Ingredient {
+                link_id,
+                ingredient: current,
+            } => match update.kind {
+                Some(ListItemKindTemplate::Ingredient {
+                    ingredient: update, ..
+                }) => {
+                    if let Some(update) = update {
+                        current.id = update.id
+                    }
+
+                    sqlx::query(
+                        "
+                        UPDATE public.ingredient_list_items
+                        SET ingredient_id = $2,
+                            ts_updated = NOW()
+                        WHERE id = $1
+                        ",
+                    )
+                    .bind(link_id.clone())
+                    .bind(current.id)
+                    .execute(&mut **tx)
+                    .await?;
+
+                    // Data might have been invalidated, just leave it out
+                    current.data = None;
+                }
+
+                // List item type cannot be changed
+                Some(_) => return Err((DbError::InvalidOperation).into()),
+
+                // Nothing to update
+                _ => {}
+            },
+
             ListItemKindTemplate::Product {
                 link_id,
                 product: current,

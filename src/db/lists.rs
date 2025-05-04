@@ -10,6 +10,8 @@ use uuid::Uuid;
 use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
 
 use super::{
+    ingredient_collections::{IngredientCollectionDataTemplate, IngredientCollectionReference},
+    ingredients::{IngredientDataTemplate, IngredientReference},
     list_items::{
         ListItemDataTemplate, ListItemKindTemplate, ListItemReference,
         TemporaryListItemDataTemplate, TemporaryListItemTemplate,
@@ -150,7 +152,30 @@ impl List {
             data: Some(ListItemDataTemplate {
                 checked: Some(first.get("item_checked")),
                 kind: Some({
-                    if let Some(id) = first.get("product_list_item_id") {
+                    if let Some(id) = first.get("ingredient_list_item_id") {
+                        ListItemKindTemplate::Ingredient {
+                            link_id: id,
+                            ingredient: Some(IngredientReference {
+                                id: first.get("ingredient_id"),
+                                data: Some(IngredientDataTemplate {
+                                    product: Some(ProductReference {
+                                        id: first.get("ingredient_product_id"),
+                                        data: Some(ProductDataTemplate {
+                                            name: Some(first.get("ingredient_product_name")),
+                                            ..Default::default()
+                                        }),
+                                        ..Default::default()
+                                    }),
+                                    collection_reference: Some(IngredientCollectionReference {
+                                        id: first.get("ingredient_collection_id"),
+                                        ..Default::default()
+                                    }),
+                                    ..Default::default()
+                                }),
+                                ..Default::default()
+                            }),
+                        }
+                    } else if let Some(id) = first.get("product_list_item_id") {
                         ListItemKindTemplate::Product {
                             link_id: id,
                             product: Some(ProductReference {
@@ -293,6 +318,11 @@ impl ListDbPostgres<'_> {
                 list_items.ts_created AS item_ts_created,
                 list_items.ts_updated AS item_ts_updated,
                 list_items.checked AS item_checked,
+                ingredient_list_items.id AS ingredient_list_item_id,
+                ingredients.id AS ingredient_id,
+                ingredient_products.id AS ingredient_product_id,
+                ingredient_products.name AS ingredient_product_name,
+                ingredients.ingredient_collection_id AS ingredient_collection_id,
                 product_list_items.id AS product_list_item_id,
                 products.id AS product_id,
                 products.name AS product_name,
@@ -302,10 +332,19 @@ impl ListDbPostgres<'_> {
             FROM public.lists
                 LEFT JOIN public.list_items
                     ON lists.id = list_items.list_id
+
+                LEFT JOIN public.ingredient_list_items
+                    ON list_items.ingredient_list_item_id = ingredient_list_items.id
+                LEFT JOIN public.ingredients
+                    ON ingredient_list_items.ingredient_id = ingredients.id
+                LEFT JOIN public.products AS ingredient_products
+                    ON ingredients.product_id = ingredient_products.id
+
                 LEFT JOIN public.product_list_items
                     ON list_items.product_list_item_id = product_list_items.id
                 LEFT JOIN public.products
                     ON product_list_items.product_id = products.id
+
                 LEFT JOIN public.temporary_list_items
                     ON list_items.temporary_list_item_id = temporary_list_items.id
 
