@@ -58,10 +58,18 @@
 										break;
 									}
 
-									if (suggestionIdx === undefined || suggestionIdx >= suggestions.length - 1) {
-										suggestionIdx = 0;
+									if (e.shiftKey) {
+										if (suggestionIdx === undefined || suggestionIdx === 0) {
+											suggestionIdx = suggestions.length - 1;
+										} else {
+											suggestionIdx--;
+										}
 									} else {
-										suggestionIdx++;
+										if (suggestionIdx === undefined || suggestionIdx >= suggestions.length - 1) {
+											suggestionIdx = 0;
+										} else {
+											suggestionIdx++;
+										}
 									}
 
 									value = suggestions[suggestionIdx].text;
