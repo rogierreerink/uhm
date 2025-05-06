@@ -2,10 +2,7 @@ import { get, host, post, type DataParams, type DataResponse } from '..';
 
 function url(searchParams: URLSearchParams = new URLSearchParams()) {
 	searchParams = new URLSearchParams(
-		searchParams
-			.entries()
-			.filter(([key]) => ['type'].includes(key))
-			.toArray()
+		[...searchParams.entries()].filter(([key]) => ['type'].includes(key))
 	);
 
 	if (searchParams.size > 0) {

@@ -399,7 +399,11 @@
 		animation-timing-function: ease;
 	}
 	@keyframes item-highlight {
-		10% {
+		5% {
+			opacity: 0;
+		}
+		30% {
+			opacity: 1;
 			color: white;
 		}
 	}

@@ -41,9 +41,6 @@
 			menuCollapseTimer = undefined;
 		}
 	}
-
-	onNavigate(() => clearMenuCollapseTimer());
-	afterNavigate(() => startMenuCollapseTimer());
 </script>
 
 <div class="container">
@@ -54,7 +51,12 @@
 	</div>
 
 	<FixSpace style="inset: 0; top: auto;">
-		<div class="menu">
+		<div
+			class="menu"
+			onmouseenter={() => clearMenuCollapseTimer()}
+			onmouseleave={() => startMenuCollapseTimer()}
+			role="presentation"
+		>
 			<MenuBar
 				collapsed={menuCollapsed}
 				ontoggle={() => {
@@ -97,6 +99,6 @@
 	.container .menu {
 		grid-area: menu;
 		width: 100%;
-		z-index: 100;
+		z-index: 1000;
 	}
 </style>

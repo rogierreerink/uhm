@@ -45,8 +45,6 @@
 		TextAnchorSlot,
 		TextButtonSlot
 	} from '../list/slots';
-	import { TextInput } from '../form';
-	import { Button } from '../form/buttons';
 	import { InputBox } from '../form/sections';
 
 	import list_items from '$lib/data/lists/items/collection';
@@ -144,7 +142,8 @@
 
 		let response = await products.get(
 			new URLSearchParams({
-				name: text
+				name: text,
+				take: '5'
 			})
 		);
 
@@ -159,7 +158,9 @@
 	}
 
 	async function addToCollectionFromInput(text: string): Promise<boolean> {
-		let suggested = inputSuggestions.find((suggestion) => suggestion.text === text);
+		let suggested = inputSuggestions.find(
+			(suggestion) => suggestion.text.toLowerCase() === text.toLowerCase()
+		);
 		if (!suggested) {
 			return false;
 		}
