@@ -3,6 +3,8 @@ pub mod collection {
 
     #[derive(Serialize, Default)]
     pub struct GetResponse<T> {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub pagination: Option<Pagination>,
         pub data: Vec<T>,
     }
 
@@ -18,8 +20,8 @@ pub mod collection {
 
     #[derive(Serialize)]
     pub struct Pagination {
-        pub skip: usize,
-        pub take: usize,
-        pub total: usize,
+        pub skip: i64,
+        pub take: i64,
+        pub total: i64,
     }
 }

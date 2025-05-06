@@ -49,7 +49,13 @@ pub async fn get_collection(State(state): State<Arc<AppState>>) -> impl IntoResp
         }
     };
 
-    Ok((StatusCode::OK, Json(GetResponse { data: items })))
+    Ok((
+        StatusCode::OK,
+        Json(GetResponse {
+            pagination: None,
+            data: items,
+        }),
+    ))
 }
 
 #[axum::debug_handler]

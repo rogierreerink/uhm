@@ -1,6 +1,6 @@
 use crate::db::products::{ProductCreate, ProductDb, SearchParams};
 use crate::global::AppState;
-use crate::utilities::request::collection::{GetResponse, PostRequest, PostResponse};
+use crate::utilities::request::collection::{GetResponse, Pagination, PostRequest, PostResponse};
 use crate::{api::handle_options, db::Db};
 
 use axum::extract::Query;
@@ -45,7 +45,7 @@ pub async fn get_collection(
 ) -> impl IntoResponse {
     let mut db = state.db().products();
 
-    let items = match db.get_multiple(query).await {
+    let items = match db.get_multiple(query.clone()).await {
         Ok(items) => items,
         Err(err) => {
             tracing::error!("failed to get items: {:?}", err);
@@ -53,7 +53,13 @@ pub async fn get_collection(
         }
     };
 
-    Ok((StatusCode::OK, Json(GetResponse { data: items })))
+    Ok((
+        StatusCode::OK,
+        Json(GetResponse {
+            pagination: Some(items.1),
+            data: items.0,
+        }),
+    ))
 }
 
 #[axum::debug_handler]

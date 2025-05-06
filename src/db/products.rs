@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgRow, prelude::FromRow, PgExecutor, PgPool, PgTransaction, Row};
 use uuid::Uuid;
 
-use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
+use crate::utilities::{
+    modifier::{Create, Modifier, Query, Reference, Update},
+    request::collection::Pagination,
+};
 
 use super::{
     list_items::{ListItemDataTemplate, ListItemReference},
@@ -17,7 +20,7 @@ use super::{
 
 #[trait_variant::make(Send)]
 pub trait ProductDb {
-    async fn get_multiple(&mut self, params: SearchParams) -> Result<Vec<Product>>;
+    async fn get_multiple(&mut self, params: SearchParams) -> Result<(Vec<Product>, Pagination)>;
     async fn get_by_id(&mut self, id: &Uuid) -> Result<Product>;
     async fn create_multiple(&mut self, items: Vec<ProductCreate>) -> Result<Vec<Product>>;
     async fn update_by_id(&mut self, id: &Uuid, item: ProductUpdate) -> Result<Product>;
@@ -49,9 +52,10 @@ pub struct ProductDataTemplate<M: Modifier> {
     pub list_item_references: Option<Vec<ListItemReference>>,
 }
 
-#[derive(Default, Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize, Clone)]
 pub struct SearchParams {
     pub name: Option<String>,
+    pub take: Option<i32>,
 }
 
 impl FromRow<'_, PgRow> for Product {
@@ -161,8 +165,9 @@ impl<'a> ProductDbPostgres<'a> {
 }
 
 impl ProductDb for ProductDbPostgres<'_> {
-    async fn get_multiple(&mut self, params: SearchParams) -> Result<Vec<Product>> {
-        let mut conn = self.pool.acquire().await?;
+    async fn get_multiple(&mut self, params: SearchParams) -> Result<(Vec<Product>, Pagination)> {
+        let mut tx = self.pool.begin().await?;
+
         let stream = sqlx::query(
             "
             SELECT DISTINCT
@@ -188,12 +193,34 @@ impl ProductDb for ProductDbPostgres<'_> {
                 match_score DESC,
                 products.name,
                 lists.name
+
+            LIMIT $2
             ",
         )
         .bind(params.name)
-        .fetch(&mut *conn);
+        .bind(params.take)
+        .fetch(&mut *tx);
 
-        Product::collect_products(stream).await
+        let products = Product::collect_products(stream).await?;
+
+        let take = products.len() as i64;
+        let total = sqlx::query(
+            "
+            SELECT COUNT(*) AS total
+            FROM public.products;
+            ",
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        Ok((
+            products,
+            Pagination {
+                skip: 0,
+                take,
+                total: total.get("total"),
+            },
+        ))
     }
 
     async fn get_by_id(&mut self, id: &Uuid) -> Result<Product> {

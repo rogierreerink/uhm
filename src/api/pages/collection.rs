@@ -53,7 +53,13 @@ pub async fn get_collection(
         }
     };
 
-    Ok((StatusCode::OK, Json(GetResponse { data: items })))
+    Ok((
+        StatusCode::OK,
+        Json(GetResponse {
+            pagination: None,
+            data: items,
+        }),
+    ))
 }
 
 #[axum::debug_handler]
