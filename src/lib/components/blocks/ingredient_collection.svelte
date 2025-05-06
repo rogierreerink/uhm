@@ -127,6 +127,9 @@
 		oninvalidate();
 	}
 
+	let newProduct = $state<{
+		text: string;
+	}>();
 	let inputSuggestions = $state<
 		{
 			id: string;
@@ -154,6 +157,37 @@
 			}));
 		}
 
+		if (
+			inputSuggestions[0] !== undefined &&
+			inputSuggestions[0].text.toLowerCase() !== text.toLowerCase()
+		) {
+			newProduct = {
+				text
+			};
+		} else {
+			newProduct = undefined;
+		}
+
+		return true;
+	}
+
+	async function createNewProduct(text: string): Promise<boolean> {
+		let response = await products.post({
+			data: [
+				{
+					name: text
+				}
+			]
+		});
+		if (!response.ok) {
+			return false;
+		}
+
+		if (!(await addToCollection(collection.id, response.data.data[0].id))) {
+			return false;
+		}
+
+		inputSuggestions = [];
 		return true;
 	}
 
@@ -283,9 +317,11 @@
 	<InputBox
 		placeholder="add ingredient..."
 		suggestions={inputSuggestions}
+		createNewItem={newProduct}
 		oninput={(text) => getSuggestions(text)}
 		onenter={(text) => addToCollectionFromInput(text)}
 		onentersuggestion={(idx) => addToCollectionFromSuggestion(idx)}
+		oncreatenew={(text) => createNewProduct(text)}
 	/>
 </div>
 

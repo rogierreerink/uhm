@@ -5,22 +5,29 @@
 	import { Button } from '$lib/components/form/buttons';
 	import { List, ListItem } from '$lib/components/list';
 	import { TextButtonSlot } from '$lib/components/list/slots';
+	import { Label } from '$lib/components/labels';
 
 	let {
 		placeholder = 'add item...',
 		suggestions = [],
+		createNewItem,
 		oninput,
 		onenter,
-		onentersuggestion
+		onentersuggestion,
+		oncreatenew
 	}: {
 		placeholder?: string;
 		suggestions?: {
 			id: string;
 			text: string;
 		}[];
+		createNewItem?: {
+			text: string;
+		};
 		oninput?: (value: string) => void;
 		onenter?: (value: string) => Promise<boolean>;
 		onentersuggestion?: (idx: number) => Promise<boolean>;
+		oncreatenew?: (text: string) => Promise<boolean>;
 	} = $props();
 
 	let value = $state('');
@@ -45,7 +52,7 @@
 								case 'Enter':
 									suggestionIdx = undefined;
 
-									if (await onenter?.(value)) {
+									if ((await onenter?.(value)) || (await oncreatenew?.(value))) {
 										value = '';
 									}
 
@@ -96,6 +103,23 @@
 		{#if suggestions.length > 0}
 			<Box>
 				<List>
+					{#if createNewItem}
+						<ListItem>
+							<TextButtonSlot
+								fill
+								onclick={async () => {
+									if (await oncreatenew?.(value)) {
+										value = '';
+									}
+								}}
+							>
+								<span>
+									<Label>create</Label>
+									{createNewItem.text}
+								</span>
+							</TextButtonSlot>
+						</ListItem>
+					{/if}
 					{#each suggestions as suggestion, idx (suggestion.id)}
 						<ListItem>
 							<TextButtonSlot
