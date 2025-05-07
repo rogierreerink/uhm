@@ -1,18 +1,18 @@
 services:
-  database-api:
-    profiles:
-      - all
+  api:
     build:
-      context: .
+      context: ./api
       target: debug
     develop:
       watch:
         - action: rebuild
-          path: ./src
+          path: ./api/migrations
         - action: rebuild
-          path: ./Cargo.toml
+          path: ./api/src
+        - action: rebuild
+          path: ./api/Cargo.toml
     environment:
-      RUST_LOG: "debug"
+      # RUST_LOG: "debug"
       # RUST_BACKTRACE: "1"
       DB_HOST: "host.docker.internal"
     ports:
@@ -21,14 +21,21 @@ services:
       db:
         condition: service_healthy
 
+  web-app:
+    build: ./web-app
+    ports:
+      - 3000:3000
+
   db:
     image: postgres
-    restart: always
     user: postgres
+    restart: always
     environment:
       - POSTGRES_PASSWORD=postgres
     ports:
       - 5432:5432
+    volumes:
+      - /var/uhm/data:/var/lib/postgresql/data
     healthcheck:
       test: [ "CMD", "pg_isready" ]
       interval: 10s

@@ -1,10 +1,4 @@
-# syntax=docker/dockerfile:1
-
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Dockerfile reference guide at
-# https://docs.docker.com/go/dockerfile-reference/
-
-ARG APP_NAME=database-api
+ARG APP_NAME=api
 
 ################################################################################
 # xx is a helper for cross-compilation.
@@ -39,6 +33,7 @@ RUN xx-apk add --no-cache musl-dev gcc
 # source code into the container. Once built, copy the executable to an
 # output directory before the cache mounted /app/target is unmounted.
 RUN --mount=type=bind,source=src,target=src \
+    --mount=type=bind,source=migrations,target=migrations \
     --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
     --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
     --mount=type=cache,target=/app/target/,id=rust-cache-${APP_NAME}-${TARGETPLATFORM} \
@@ -79,6 +74,7 @@ RUN xx-apk add --no-cache musl-dev gcc
 # source code into the container. Once built, copy the executable to an
 # output directory before the cache mounted /app/target is unmounted.
 RUN --mount=type=bind,source=src,target=src \
+    --mount=type=bind,source=migrations,target=migrations \
     --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
     --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
     --mount=type=cache,target=/app/target/,id=rust-cache-${APP_NAME}-${TARGETPLATFORM} \
