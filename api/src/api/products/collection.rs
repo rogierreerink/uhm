@@ -1,6 +1,6 @@
 use crate::db::products::{ProductCreate, ProductDb, SearchParams};
 use crate::global::AppState;
-use crate::utilities::request::collection::{GetResponse, Pagination, PostRequest, PostResponse};
+use crate::utilities::request::collection::{GetResponse, PostRequest, PostResponse};
 use crate::{api::handle_options, db::Db};
 
 use axum::extract::Query;

@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::utilities::modifier::{Create, Modifier, Query, Reference, Update};
 
 use super::{
-    ingredient_collections::{IngredientCollectionDataTemplate, IngredientCollectionReference},
+    ingredient_collections::IngredientCollectionReference,
     ingredients::{IngredientDataTemplate, IngredientReference},
     list_items::{
         ListItemDataTemplate, ListItemKindTemplate, ListItemReference,

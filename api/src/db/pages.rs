@@ -38,7 +38,7 @@ pub trait PageDb {
 pub type Page = PageTemplate<Query>;
 pub type PageCreate = PageDataTemplate<Create>;
 pub type PageUpdate = PageDataTemplate<Update>;
-pub type PageReference = PageTemplate<Reference>;
+// pub type PageReference = PageTemplate<Reference>;
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct PageTemplate<M: Modifier> {
@@ -136,7 +136,12 @@ impl Page {
                 r#type: first.get("type"),
                 name: first.get("name"),
                 blocks: {
-                    let mut items = vec![Self::collect_page_block(first, rest, summary).await?];
+                    let mut items = Vec::new();
+
+                    if first.get::<Option<Uuid>, _>("page_block_id").is_some() {
+                        items.push(Self::collect_page_block(first, rest, summary).await?);
+                    }
+
                     loop {
                         if !next_matches_first!(rest, first, "id") {
                             break items;
@@ -200,7 +205,12 @@ impl Page {
             id: first.get("ingredient_collection_id"),
             data: Some(IngredientCollectionDataTemplate {
                 ingredients: Some({
-                    let mut items = vec![Self::collect_ingredient(first, rest).await?];
+                    let mut items = Vec::new();
+
+                    if first.get::<Option<Uuid>, _>("ingredient_id").is_some() {
+                        items.push(Self::collect_ingredient(first, rest).await?);
+                    }
+
                     loop {
                         if !next_matches_first!(rest, first, "id", "block_id") {
                             break items;
