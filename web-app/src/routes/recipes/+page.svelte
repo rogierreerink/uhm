@@ -3,7 +3,7 @@
 	import { List, ListItem } from '$lib/components/list';
 	import { TextAnchorSlot } from '$lib/components/list/slots';
 	import type { GetResponse } from '$lib/data/pages/collection';
-	import type { GetResponse as GetListsResponse } from '$lib/data/lists/collection';
+	import { TextSlot } from '../../lib/components/list/slots';
 
 	let {
 		data
@@ -30,6 +30,16 @@
 					</TextAnchorSlot>
 				</ListItem>
 			{/each}
+
+			{#if data.recipes.data.length === 0}
+				<ListItem>
+					<TextSlot fill>
+						<div class="not-found">
+							<i>no recipes found</i>
+						</div>
+					</TextSlot>
+				</ListItem>
+			{/if}
 		</List>
 	</Box>
 </section>
