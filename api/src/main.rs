@@ -4,7 +4,7 @@ use axum::{
     http::{header, HeaderValue},
     Router,
 };
-use db::DbPostgres;
+use db::{Db, DbPostgres};
 use global::{AppDb, AppState};
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceBuilder;
@@ -50,6 +50,12 @@ async fn main() {
     let app_state = Arc::new(AppState {
         db: AppDb::Postgres(DbPostgres::new(db_pool)),
     });
+
+    tracing::info!("migrating database");
+    if let Err(err) = app_state.db().migrate().await {
+        tracing::error!("failed to migrate database: {}", err);
+        return;
+    }
 
     tracing::info!("setting up routes");
     let app = Router::new()

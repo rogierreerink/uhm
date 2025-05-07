@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt::{Debug, Display};
 
+use anyhow::Result;
 use blocks::{BlockDb, BlockDbPostgres};
 use ingredient_collections::{IngredientCollectionDb, IngredientCollectionDbPostgres};
 use ingredients::{IngredientDb, IngredientDbPostgres};
@@ -29,6 +30,7 @@ pub trait Db {
     fn markdown(&self) -> impl MarkdownDb;
     fn pages(&self) -> impl PageDb;
     fn products(&self) -> impl ProductDb;
+    async fn migrate(&self) -> Result<()>;
 }
 
 pub struct DbPostgres {
@@ -73,13 +75,16 @@ impl Db for DbPostgres {
     fn products(&self) -> impl ProductDb {
         ProductDbPostgres::new(&self.sqlx)
     }
+
+    async fn migrate(&self) -> Result<()> {
+        Ok(sqlx::migrate!().run(&self.sqlx).await?)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DbError {
     NotFound,
     InvalidOperation,
-    InvalidContent,
 }
 
 impl Display for DbError {
@@ -87,7 +92,6 @@ impl Display for DbError {
         match self {
             DbError::NotFound => write!(f, "resource could not be found"),
             DbError::InvalidOperation => write!(f, "operation may not be performed"),
-            DbError::InvalidContent => write!(f, "invalid database contents"),
         }
     }
 }
